@@ -104,7 +104,7 @@ public:
         GroupSessions& sessions,
         const std::string& groupId,
         const PriorRole& prior,
-        const Group& opened
+        const std::array<PlaneOpening, 2>& planes
     );
     // A self-update; with `previousKey`, the leaf renewal: no need gates, a climb with the previous key over a
     // call-local cache, signed with the session's (new) key. False when there was nothing to commit (no need, the

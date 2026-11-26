@@ -3589,6 +3589,24 @@ TEST_F(GroupApiLyingBridge, ACutStartsAPlaneItCouldNotAttestOverEmpty) {
     EXPECT_TRUE(read.publicMeta.stdString().empty());
 }
 
+TEST_F(GroupApiLyingBridge, ACutJudgesEachPlaneOnItsOwn) {
+    // bob writes both planes: the private one under editPrivateMeta ("members"), the public one without
+    // editPublicMeta. Only the public plane is started over; the private one is carried with what it says.
+    const std::string groupId = createGroup(
+        {"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}, {"editPrivateMeta", "members"}})
+    );
+    client("bob").updateGroupPrivateMeta(groupId, core::Buffer::from("bob's private"), 1);
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
+    ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_EQ(client("alice").cutHistory(groupId), 2);
+    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2);
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2);
+    const Group read = client("carol").getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_TRUE(read.publicMeta.stdString().empty()) << "the plane that failed is started over";
+    EXPECT_EQ(read.privateMeta.stdString(), "bob's private") << "the good plane was blanked with the failed one";
+}
+
 TEST_F(GroupApiLyingBridge, ACutNeedsTrimHistory) {
     // "nobody" by default: refused before anything is signed or sent.
     const std::string groupId = createGroup({"alice", "bob"}, std::nullopt);

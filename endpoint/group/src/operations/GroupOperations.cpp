@@ -864,11 +864,20 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
         assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", "cutting the group's history");
         assertRule(verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", "cutting the group's history");
     }
-    // A cut's planes as opened on this read: the keys below the new floor are gone once it lands, so the carry after
-    // it writes these (`runCutFollowUp`), whichever call finds it landed.
-    const Group opened = cutHistory ?
-        mapper.validateDecryptAndConvertGroup(currentGroup, keyProvider, keys.resolverOver(&verified), prior) :
-        Group{};
+    // A cut's planes as opened on this read, each on its own: the keys below the new floor are gone once it lands, so
+    // the carry after it writes these (`runCutFollowUp`), whichever call finds it landed. A plane that cannot be
+    // judged now (a key not resolved, the UserVerifier away) could never be later: no cut until it can.
+    std::array<PlaneOpening, 2> planes{};
+    if (cutHistory) {
+        planes = mapper.openPlanesSeparately(currentGroup, keyProvider, keys.resolverOver(&verified), prior);
+        for (const PlaneOpening& plane : planes) {
+            if (!plane.content.has_value() && !plane.failedForGood) {
+                throw core::EncryptionKeyValidationException(
+                    "a metadata plane of the group cannot be opened now; the history is not cut, try again"
+                );
+            }
+        }
+    }
     const keytree::TreeGroupState state = climbForPlanning(verified, cache);
     const auto currentGrantKey = cache->getGrantKey(keytree::GroupKeyResolver::epochOf(currentEpoch));
     if (!currentGrantKey.has_value() ||
@@ -931,8 +940,8 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
             .send = [&serverApi = deps.serverApi, sent] { serverApi.groupGenerateNewKey(*sent); },
             // Pinned before anything reads the group again: the state under the replaced key is refused from here on.
             .landed = landedEpoch(currentGroup.contextId, statement, roster, rules, plan.grantKey),
-            .after = cutHistory ? std::function<void()>([&sessions = deps.sessions, groupId, prior, opened] {
-                queueCutFollowUp(sessions, groupId, prior, opened);
+            .after = cutHistory ? std::function<void()>([&sessions = deps.sessions, groupId, prior, planes] {
+                queueCutFollowUp(sessions, groupId, prior, planes);
             }) :
                                   std::function<void()>([&metadata = metadata, groupId, prior] {
                                       metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior);
@@ -940,7 +949,7 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
         }
     );
     if (cutHistory) {
-        queueCutFollowUp(deps.sessions, groupId, prior, opened);
+        queueCutFollowUp(deps.sessions, groupId, prior, planes);
     }
     return true;
 }
@@ -949,11 +958,11 @@ void GroupOperations::queueCutFollowUp(
     GroupSessions& sessions,
     const std::string& groupId,
     const PriorRole& prior,
-    const Group& opened
+    const std::array<PlaneOpening, 2>& planes
 ) {
     const auto session = sessions.of(groupId);
     std::lock_guard<std::mutex> lock(session->mutex);
-    session->pendingCut = PendingCut{.prior = prior, .opened = opened};
+    session->pendingCut = PendingCut{.prior = prior, .planes = planes, .givenUp = {}};
 }
 
 bool GroupOperations::selfUpdate(

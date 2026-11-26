@@ -718,6 +718,101 @@ Group GroupDataSchemaMapper::validateDecryptAndConvertGroup(
     return validateDecryptAndConvertGroups({groupInfo}, keyProvider, groupPrivKeyResolver, prior, storePins)[0];
 }
 
+std::array<PlaneOpening, 2> GroupDataSchemaMapper::openPlanesSeparately(
+    const server::GroupInfo& g,
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const PriorRole& prior
+) {
+    std::array<PlaneOpening, 2> planes{};
+    // The common part: a roster that does not hold says nothing about either plane, so neither is judged.
+    const auto [code, rosterDio] = validateDataIntegrity(g);
+    if (code != 0) {
+        return planes;
+    }
+    const core::EncKeyLocation location{.contextId = g.contextId, .resourceId = g.resourceId.value_or("")};
+    core::KeyDecryptionAndVerificationRequest keyRequest;
+    addReadKeys(keyRequest, g, location);
+    decltype(keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver)) allKeys;
+    try {
+        allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
+    } catch (...) { return planes; }
+    const auto keyOf = [&](const std::string& keyId) -> const core::DecryptedEncKeyV2* {
+        const auto at = allKeys.find(location);
+        if (at == allKeys.end()) {
+            return nullptr;
+        }
+        const auto found = at->second.find(keyId);
+        return found == at->second.end() || found->second.statusCode() != 0 ? nullptr : &found->second;
+    };
+    const core::DecryptedEncKeyV2* rosterKey = keyOf(g.data.back().keyId);
+    if (rosterKey == nullptr) {
+        return planes;
+    }
+    try {
+        assertRosterIsAttested(g, *rosterKey);
+    } catch (...) { return planes; }
+    for (const bool publicPlane : {true, false}) {
+        PlaneOpening& plane = planes[publicPlane ? 0 : 1];
+        const server::GroupMetaEntry& entry = publicPlane ? g.publicMeta : g.privateMeta;
+        const core::DecryptedEncKeyV2* key = keyOf(entry.keyId);
+        if (key == nullptr) {
+            continue; // not resolved: not judged
+        }
+        core::DataIntegrityObject dio;
+        try {
+            if (publicPlane) {
+                assertPublicMetaIsAttested(g, *key, prior);
+                const auto opened = _groupEncryptor.extractPublicMeta(
+                    dynamic::EncryptedGroupPublicMetaV5::fromJSON(entry.data)
+                );
+                if (opened.error) {
+                    throw GroupDataIntegrityException();
+                }
+                plane.content = opened.publicMeta;
+                dio = opened.dio;
+            } else {
+                assertPrivateMetaIsAttested(g, *key, prior);
+                const auto opened = _groupEncryptor.decryptPrivateMeta(
+                    dynamic::EncryptedGroupPrivateMetaV5::fromJSON(entry.data), key->key
+                );
+                if (opened.error) {
+                    throw GroupDataIntegrityException();
+                }
+                plane.content = opened.privateMeta;
+                dio = opened.dio;
+            }
+            if (dio.creatorUserId != entry.author) {
+                throw GroupDataIntegrityException();
+            }
+        } catch (const core::Exception&) {
+            plane = PlaneOpening{.content = std::nullopt, .failedForGood = true};
+            continue;
+        } catch (...) {
+            plane = PlaneOpening{};
+            continue;
+        }
+        // The authors as every read asks for them; a refusal here may be the application's directory being away,
+        // so the plane is not judged rather than failed.
+        const auto verified = _connection.getImpl()->getUserVerifier()->verify(
+            {{.contextId = g.contextId,
+              .senderId = g.history.back().author,
+              .senderPubKey = rosterDio.creatorPubKey,
+              .date = g.history.back().created,
+              .bridgeIdentity = rosterDio.bridgeIdentity},
+             {.contextId = g.contextId,
+              .senderId = entry.author,
+              .senderPubKey = dio.creatorPubKey,
+              .date = entry.created,
+              .bridgeIdentity = dio.bridgeIdentity}}
+        );
+        if (verified.size() != 2 || !verified[0] || !verified[1]) {
+            plane = PlaneOpening{};
+        }
+    }
+    return planes;
+}
+
 std::pair<std::vector<std::string>, std::vector<std::string>> GroupDataSchemaMapper::validateAndGetAttestedRoster(
     const server::GroupInfo& groupInfo,
     const std::shared_ptr<core::KeyProvider>& keyProvider,

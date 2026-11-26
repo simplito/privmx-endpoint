@@ -55,11 +55,11 @@ struct UnresolvedCommit {
     std::function<void()> after;                 // best-effort follow-up (a removal's metadata refresh) or empty
 };
 
-// A history cut's follow-up still to do: the read before the cut, its planes as opened then, and the Spaces given
-// up on (refused for good), which are not retried.
+// A history cut's follow-up still to do: the read before the cut, each plane as opened then (public, private), and
+// the Spaces given up on (refused for good), which are not retried.
 struct PendingCut {
     PriorRole prior;
-    Group opened;
+    std::array<PlaneOpening, 2> planes;
     std::set<std::string> givenUp;
 };
 

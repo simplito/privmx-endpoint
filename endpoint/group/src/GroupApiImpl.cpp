@@ -325,13 +325,37 @@ void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
     if (!pending.has_value()) {
         return;
     }
-    // The planes as opened before the cut: their keys below the new floor are gone. A plane not attested then can
-    // never be opened now: started over empty, as a removal that abandons history does.
-    bool done = pending->opened.statusCode == 0 ?
-        _metadata.carryMetadataForward(
-            groupId, CarryScope::NewEpoch, false, pending->prior, false, false, &pending->opened
-        ) :
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, true, pending->prior);
+    // Each plane as opened before the cut (their keys below the new floor are gone): carried if it passed every
+    // check then, started over empty if it failed one for good, and only while it is still the entry read then;
+    // already current or written over since, nothing to do. A failed write leaves it for the next call.
+    bool done = true;
+    try {
+        const VerifiedGroup verified = readGroupForKeys(groupId);
+        for (const bool publicPlane : {true, false}) {
+            const PlaneOpening& plane = pending->planes[publicPlane ? 0 : 1];
+            const server::GroupMetaEntry& now = publicPlane ? verified->publicMeta : verified->privateMeta;
+            const server::GroupMetaEntry& then = publicPlane ? pending->prior.publicMeta : pending->prior.privateMeta;
+            if (now.keyVersion >= verified->keyVersion || !GroupDataSchemaMapper::sameEntry(now, then)) {
+                continue;
+            }
+            if (!plane.content.has_value() && !plane.failedForGood) {
+                done = false; // not judged before the cut (never queued so; a guard): never blanked
+                continue;
+            }
+            try {
+                _metadata.writeMeta(
+                    verified, publicPlane, plane.content.value_or(core::Buffer()),
+                    publicPlane ? verified->publicMetaVersion : verified->privateMetaVersion
+                );
+            } catch (const std::exception& e) {
+                done = false;
+                LOG_WARN("[cutHistory] group ", groupId, " plane not carried past the cut yet: ", e.what())
+            }
+        }
+    } catch (const std::exception& e) {
+        done = false;
+        LOG_WARN("[cutHistory] group ", groupId, " planes not carried past the cut yet: ", e.what())
+    }
     try {
         const std::string contextId = readGroupForKeys(groupId)->contextId;
         const auto epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
