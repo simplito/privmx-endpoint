@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/BigEndian.hpp"
 #include "privmx/endpoint/core/Constants.hpp"
+#include "privmx/endpoint/core/ContainerBaseApi.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/EventBuilder.hpp"
@@ -256,20 +257,19 @@ void ConnectionImpl::useKeyContinuity() {
     // `this` outlives the verifier's use: the connection owns it, and drops it with itself.
     auto verifier = std::make_shared<KeyContinuityVerifier>(
         [this](const std::string& contextId) { return getMyUserId(contextId); },
-        [this](const std::string& contextId) {
+        [this](const std::string& contextId, const std::vector<std::string>& userIds) {
             std::map<std::string, std::string> keys;
-            const int64_t limit = 100;
-            for (int64_t skip = 0;; skip += limit) {
-                const PagingList<UserInfo> page = listContextUsers(
-                    contextId, PagingQuery{.skip = skip, .limit = limit, .sortOrder = "asc"}
+            for (std::size_t offset = 0; offset < userIds.size(); offset += ContainerBaseApi::BRIDGE_MAX_BATCH_SIZE) {
+                const std::vector<std::string> ids(
+                    userIds.begin() + offset,
+                    userIds.begin() + std::min(offset + ContainerBaseApi::BRIDGE_MAX_BATCH_SIZE, userIds.size())
                 );
-                for (const UserInfo& user : page.readItems) {
+                for (const UserInfo& user :
+                     listContextUsers(contextId, ContainerBaseApi::pageOfIds("#userId", ids)).readItems) {
                     keys[user.user.userId] = user.user.pubKey;
                 }
-                if (page.readItems.size() < static_cast<std::size_t>(limit) || skip + limit >= page.totalAvailable) {
-                    return keys;
-                }
             }
+            return keys;
         }
     );
     std::unique_lock lock(_mutex);

@@ -30,8 +30,21 @@ std::map<std::string, std::map<std::string, std::string>> directory = {
     {"other", {{"bob", "K2"}}},
 };
 
+std::vector<std::vector<std::string>> asked; // the user ids of every listing asked for, in order
+
+// The directory's answer for the users asked about, as `listContextUsers` filtered by id serves it.
 KeyContinuityVerifier::ListedKeys listed() {
-    return [](const std::string& contextId) { return directory[contextId]; };
+    return [](const std::string& contextId, const std::vector<std::string>& userIds) {
+        asked.push_back(userIds);
+        std::map<std::string, std::string> keys;
+        for (const std::string& id : userIds) {
+            const auto user = directory[contextId].find(id);
+            if (user != directory[contextId].end()) {
+                keys.insert(*user);
+            }
+        }
+        return keys;
+    };
 }
 
 auto me() {
@@ -132,7 +145,7 @@ TEST(KeyContinuityVerifier, SECURITY_AKeyPinnedToOneUserIsNotTakenForAnother) {
 TEST(KeyContinuityVerifier, SECURITY_WithoutTheBridgesListNoFirstUseIsAccepted) {
     KeyContinuityVerifier unlisted;
     EXPECT_FALSE(ask(unlisted, "bob", "K1"));
-    KeyContinuityVerifier failing(nullptr, [](const std::string&) -> std::map<std::string, std::string> {
+    KeyContinuityVerifier failing(nullptr, [](const std::string&, const std::vector<std::string>&) -> std::map<std::string, std::string> {
         throw std::runtime_error("unreachable");
     });
     EXPECT_FALSE(ask(failing, "bob", "K1"));
@@ -154,4 +167,23 @@ TEST(KeyContinuityVerifier, SECURITY_AFirstUseIsHeldToTheBridgesListAsItIsNow) {
     EXPECT_FALSE(ask(verifier, "frank", "F-OLD")) << "a key replaced since an earlier listing is not pinned";
     EXPECT_TRUE(ask(verifier, "frank", "F-NEW"));
     directory["ctx"].erase("frank");
+}
+
+TEST(KeyContinuityVerifier, OnlyTheUsersSeenForTheFirstTimeAreListedOncePerCall) {
+    KeyContinuityVerifier verifier(nullptr, listed());
+    ASSERT_TRUE(ask(verifier, "bob", "K1"));
+    asked.clear();
+    const auto request = [](const std::string& user, const std::string& key) {
+        return VerificationRequest{
+            .contextId = "ctx", .senderId = user, .senderPubKey = key, .date = 1, .bridgeIdentity = std::nullopt
+        };
+    };
+    EXPECT_EQ(
+        verifier.verify({request("bob", "K1"), request("carol", "K2"), request("eve", "EVE"), request("carol", "K2")}),
+        std::vector<bool>({true, true, true, true})
+    );
+    EXPECT_EQ(asked, std::vector<std::vector<std::string>>({{"carol", "eve"}})) << "bob is pinned, carol asked once";
+    asked.clear();
+    EXPECT_TRUE(ask(verifier, "carol", "K2"));
+    EXPECT_TRUE(asked.empty()) << "nobody left to list";
 }

@@ -17,6 +17,7 @@ limitations under the License.
 #include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -45,13 +46,16 @@ namespace core {
 // map into the PinStore next to the group pins when that matters.
 class KeyContinuityVerifier : public virtual UserVerifierInterface {
 public:
-    // userId -> public key (Base58DER) of every user the Bridge lists in a Context.
-    using ListedKeys = std::function<std::map<std::string, std::string>(const std::string& contextId)>;
+    // userId -> public key (Base58DER) the Bridge lists in a Context, for the users asked about (one not listed
+    // there is left out).
+    using ListedKeys = std::function<
+        std::map<std::string, std::string>(const std::string& contextId, const std::vector<std::string>& userIds)>;
 
     // `ownUserId`: this connection's user id in a Context, or "" when it cannot be told. Asked only for a request
     // that presents one of the connection's own keys.
-    // `listedKeys`: asked once per `verify` call and Context with a first use in it, never cached across calls (a
-    // pinned user is not asked about again). Null, or throwing: no first use is accepted.
+    // `listedKeys`: asked once per `verify` call and Context with a first use in it, for the users seen there for the
+    // first time only, never cached across calls (a pinned user is not asked about again). Null, or throwing: no
+    // first use is accepted.
     explicit KeyContinuityVerifier(
         std::function<std::string(const std::string& contextId)> ownUserId = nullptr,
         ListedKeys listedKeys = nullptr
@@ -90,14 +94,38 @@ public:
             }
         }
         // What the Bridge lists for each user seen for the first time: looked up outside the lock, too.
-        std::vector<bool> listed(request.size(), false);
-        std::map<std::string, std::optional<std::map<std::string, std::string>>> listings; // this call's only
+        std::vector<bool> firstUse(request.size(), false);
+        std::map<std::string, std::set<std::string>> unpinned; // contextId -> users seen there for the first time
         for (std::size_t i = 0; i < request.size(); ++i) {
             const VerificationRequest& item = request[i];
-            if (own[i] != Own::UNDECIDED || isPinned(item.contextId, item.senderId)) {
+            if (own[i] == Own::UNDECIDED && !isPinned(item.contextId, item.senderId)) {
+                firstUse[i] = true;
+                unpinned[item.contextId].insert(item.senderId);
+            }
+        }
+        // SECURITY: the listing is fetched fresh for each `verify` call, never taken from an earlier call: a key the
+        // user replaced (after a compromise, say) must not be pinned off a stale list.
+        std::map<std::string, std::optional<std::map<std::string, std::string>>> listings; // this call's only
+        for (const auto& [contextId, userIds] : unpinned) {
+            std::optional<std::map<std::string, std::string>> users;
+            try {
+                if (_listedKeys) {
+                    users = _listedKeys(contextId, std::vector<std::string>(userIds.begin(), userIds.end()));
+                }
+            } catch (...) {}
+            listings.emplace(contextId, std::move(users));
+        }
+        std::vector<bool> listed(request.size(), false);
+        for (std::size_t i = 0; i < request.size(); ++i) {
+            if (!firstUse[i]) {
                 continue;
             }
-            listed[i] = isListed(item.contextId, item.senderId, item.senderPubKey, listings);
+            const VerificationRequest& item = request[i];
+            const auto& listing = listings.at(item.contextId);
+            if (listing.has_value()) {
+                const auto user = listing->find(item.senderId);
+                listed[i] = user != listing->end() && user->second == item.senderPubKey;
+            }
         }
         std::lock_guard<std::mutex> lock(_mutex);
         std::vector<bool> result;
@@ -216,33 +244,6 @@ private:
             }
         }
         return false;
-    }
-
-    // Whether the Bridge lists `pubKey` for the user; false when it cannot be asked. Not under _mutex.
-    // SECURITY: the listing is fetched fresh for each `verify` call that has a first use in the Context, never taken
-    // from an earlier call: a key the user replaced (after a compromise, say) must not be pinned off a stale list.
-    bool isListed(
-        const std::string& contextId,
-        const std::string& userId,
-        const std::string& pubKey,
-        std::map<std::string, std::optional<std::map<std::string, std::string>>>& listings
-    ) {
-        if (!_listedKeys) {
-            return false;
-        }
-        auto listing = listings.find(contextId);
-        if (listing == listings.end()) {
-            std::optional<std::map<std::string, std::string>> users;
-            try {
-                users = _listedKeys(contextId);
-            } catch (...) {}
-            listing = listings.emplace(contextId, std::move(users)).first;
-        }
-        if (!listing->second.has_value()) {
-            return false;
-        }
-        const auto user = listing->second->find(userId);
-        return user != listing->second->end() && user->second == pubKey;
     }
 
     std::mutex _mutex;

@@ -63,6 +63,10 @@ struct module_has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::
 // preparation around a create or an update. Group grants live one layer up, in `group::GroupAwareModuleApi`.
 class ContainerBaseApi {
 public:
+    // The bridge's list calls answer at most this many items a page.
+    static constexpr std::size_t BRIDGE_MAX_BATCH_SIZE = 100;
+    // One page of the items whose `field` is one of `ids` (at most BRIDGE_MAX_BATCH_SIZE of them).
+    static PagingQuery pageOfIds(const std::string& field, const std::vector<std::string>& ids);
     ContainerBaseApi(
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -98,11 +102,6 @@ protected:
     // Both the key id and a V1 entry are the server's word alone, so only a verified V2 entry may pick what new
     // content is encrypted under. V1 keys stay readable for old data.
     static void assertWriteKey(const core::DecryptedEncKey& key);
-
-    // The bridge's list calls answer at most this many items a page.
-    static constexpr std::size_t BRIDGE_MAX_BATCH_SIZE = 100;
-    // One page of the items whose `field` is one of `ids` (at most BRIDGE_MAX_BATCH_SIZE of them).
-    static PagingQuery pageOfIds(const std::string& field, const std::vector<std::string>& ids);
 
     template<typename ModuleStruct>
     auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId = std::nullopt)
