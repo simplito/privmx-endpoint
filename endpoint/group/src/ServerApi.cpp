@@ -169,14 +169,6 @@ server::GroupGetTreeCommitsResult ServerApi::groupGetTreeCommits(server::GroupGe
     return request<server::GroupGetTreeCommitsResult>("groupGetTreeCommits", model.toJSON());
 }
 
-void ServerApi::groupCutEra(server::GroupCutEraModel model) {
-    request("groupCutEra", model.toJSON());
-}
-
-void ServerApi::groupPruneArchive(server::GroupPruneArchiveModel model) {
-    request("groupPruneArchive", model.toJSON());
-}
-
 server::GroupGetKeyArchiveResult ServerApi::groupGetKeyArchive(server::GroupGetKeyArchiveModel model) {
     return request<server::GroupGetKeyArchiveResult>("groupGetKeyArchive", model.toJSON());
 }

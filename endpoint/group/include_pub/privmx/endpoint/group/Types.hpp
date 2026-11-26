@@ -53,7 +53,7 @@ struct GroupRoleChange {
 
 /**
  * Who may do what in a Group, as the Group's signed statements bind it. Every rule is "managers", "members" or
- * "nobody", and defaults to "managers". An operation needs every rule it touches: adding a manager needs
+ * "nobody", and defaults to "managers" (`trimHistory` to "nobody"). An operation needs every rule it touches: adding a manager needs
  * `addMembers` and `changeRoles`, removing one `removeMembers` and `changeRoles`. Fixed, with no rule: any member
  * may rotate the Group key (GroupApi::rotateGroupKey) and renew its own leaf; nobody removes themselves (another
  * member removes them); a Group that has managers keeps at least one; deleting a Group is the managers'. The
@@ -72,7 +72,7 @@ struct GroupRules {
     std::string changeRules;
     /** Who may set the Group's visibility (GroupApi::setGroupVisibility). The visibility itself is not signed. */
     std::string changeVisibility;
-    /** Who may cut the Group's history off (era cuts, archive pruning, abandoning history). */
+    /** Who may cut the Group's history off (GroupApi::cutHistory); "nobody" by default. */
     std::string trimHistory;
     /** Who may rewrite the Group's public metadata. */
     std::string editPublicMeta;

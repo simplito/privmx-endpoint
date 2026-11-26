@@ -192,7 +192,7 @@ std::string refreshedToJson(const CommitPlan& plan) {
 }
 
 // A tree-backed group as the bridge stores it, with the members' private halves.
-// A rules object: every rule "managers" (the defaults) but those given.
+// A rules object: every rule "managers" but those given.
 Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rules) {
     Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
     for (const std::string& field : TreeCommits::ruleFields()) {

@@ -274,6 +274,26 @@ int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
 }
 
+int64_t GroupApiImpl::cutHistory(const std::string& groupId) {
+    _metadata.retryPendingCarry(groupId);
+    bool committedHere = true;
+    PriorRole prior;
+    try {
+        CommitEngine::commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior, true); });
+    } catch (const core::Exception& e) {
+        if (e.getCode() == privmx::endpoint::server::GroupInUseException().getCode()) {
+            throw GroupHistoryInUseException(e);
+        }
+        throw;
+    }
+    // As after a rotation. The cutter still holds the cut epoch's key, so the planes are carried with what they say.
+    if (committedHere) {
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior);
+    }
+    runDueWork(groupId);
+    return static_cast<int64_t>(pinnedKeyVersion(groupId));
+}
+
 int64_t GroupApiImpl::replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds) {
     _metadata.retryPendingCarry(groupId);
     std::optional<bool> historyAbandoned;

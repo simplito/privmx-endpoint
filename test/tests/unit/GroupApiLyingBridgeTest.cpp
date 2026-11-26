@@ -445,6 +445,20 @@ struct Bridge {
             beforeRotation();
             tree.rotate(caller, model.grantEdge, PublicKey::fromBase58DER(model.groupPubKey), model.commit);
             onRotationCommit(tree.commits.back());
+            if (model.cutHistory.value_or(false)) {
+                if (!model.rungs.empty()) {
+                    throw archiveInvalid(); // a cut publishes no rung down
+                }
+                // The era floor at the new epoch; every rung below it deleted.
+                eraFloor = static_cast<std::int64_t>(tree.state.epoch);
+                rungs.erase(
+                    std::remove_if(
+                        rungs.begin(), rungs.end(),
+                        [&](const server::GroupArchiveRung& rung) { return rung.targetKeyVersion < eraFloor; }
+                    ),
+                    rungs.end()
+                );
+            }
             storeNewEpoch(caller, model);
             afterRotation();
             return Poco::Dynamic::Var();
@@ -3468,20 +3482,63 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotSealACachedGrantKeyThatIsNot
     EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
 }
 
-TEST_F(GroupApiLyingBridge, ARemovalThatWouldAbandonHistoryNeedsTrimHistory) {
-    // bob's own leaf does not open, so his removal would abandon history: trimHistory's, the managers' here.
-    // Refused before anything is sent; the Bridge enforces the same rule.
+TEST_F(GroupApiLyingBridge, ARemovalThatAbandonsHistoryNeedsOnlyTheRemovalRules) {
+    // bob's own leaf does not open, so his removal abandons history: a removal's consequence, not a cut, so
+    // trimHistory ("nobody" here) is not asked.
     quiet = true;
     std::map<std::string, std::string> rules;
     for (const std::string& field : TreeCommits::ruleFields()) {
-        rules[field] = field == "trimHistory" ? "managers" : "members";
+        rules[field] = field == "trimHistory" ? "nobody" : "members";
     }
     const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith(rules));
     selfUpdateBy("alice");
     garbleLeafEdgeOf(bridge, "bob", "alice");
-    EXPECT_THROW(client("bob").removeGroupMembers(groupId, {"carol"}), GroupUnauthorizedSignerException);
-    EXPECT_EQ(count("bob", "context.groupRemoveMembers"), 0u);
-    EXPECT_EQ(bridge.tree.state.epoch, 1u);
+    EXPECT_NO_THROW(client("bob").removeGroupMembers(groupId, {"carol"}));
+    expectRemoved(bridge, "carol");
+}
+
+TEST_F(GroupApiLyingBridge, ACutNeedsTrimHistory) {
+    // "nobody" by default: refused before anything is signed or sent.
+    const std::string groupId = createGroup({"alice", "bob"}, std::nullopt);
+    EXPECT_THROW(client("alice").cutHistory(groupId), GroupUnauthorizedSignerException);
+    EXPECT_EQ(count("alice", "context.groupGenerateNewKey"), 0u);
+    EXPECT_TRUE(bridge.received.empty());
+}
+
+TEST_F(GroupApiLyingBridge, ACutPublishesNoRungAndLeavesTheGroupReadable) {
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}}));
+    client("bob").getGroup(groupId);
+    const std::size_t rungsBefore = bridge.rungs.size();
+    EXPECT_EQ(client("alice").cutHistory(groupId), 2);
+    EXPECT_EQ(bridge.rungs.size(), rungsBefore) << "a cut published a rung down";
+    EXPECT_EQ(bridge.eraFloor, 2);
+    const auto cut = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const Bridge::Call& call) {
+        return call.method == "context.groupGenerateNewKey";
+    });
+    ASSERT_NE(cut, bridge.calls.rend());
+    EXPECT_TRUE(cut->params->optValue<bool>("cutHistory", false));
+    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2) << "the planes were carried up";
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2);
+    for (const std::string id : {"alice", "bob", "carol"}) {
+        const Group read = client(id).getGroup(groupId);
+        EXPECT_EQ(read.statusCode, 0) << id;
+        EXPECT_EQ(read.keyVersion, 2) << id;
+        EXPECT_EQ(read.privateMeta.stdString(), "private") << id;
+    }
+    // A plain rotation after the cut publishes its rung again, down to the floor only.
+    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
+    EXPECT_EQ(bridge.eraFloor, 2);
+    EXPECT_GT(bridge.rungs.size(), rungsBefore);
+}
+
+TEST_F(GroupApiLyingBridge, ACutASpaceStillNeedsSurfacesAsInUse) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"}, policyWith({{"trimHistory", "managers"}}));
+    bridge.beforeRotation = [] { bridgeError<srv::GroupInUseException>(); };
+    EXPECT_THROW(client("alice").cutHistory(groupId), GroupHistoryInUseException);
+    bridge.beforeRotation = [] {};
+    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId)) << "the refused cut is not resent under a rotation";
+    EXPECT_EQ(bridge.eraFloor, 1);
 }
 
 TEST_F(GroupApiLyingBridge, AVisibilityChangeNeedsChangeVisibility) {
@@ -3973,6 +4030,42 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_WindowPagesThatNeverEndStopAtTheWi
     for (std::size_t i = 1; i < asks.size(); ++i) {
         EXPECT_EQ(asks[i].fromKeyVersion.value(), asks[i - 1].fromKeyVersion.value() + 1) << "page " << i;
         EXPECT_LE(asks[i].fromKeyVersion.value(), static_cast<std::int64_t>(ROTATIONS + 1)) << "asked past the window";
+    }
+}
+
+TEST_F(GroupApiLyingBridgeOldEpochs, AFloorSetWithoutARotationReadsAsAnEraBoundaryNotTampering) {
+    // The management API's cut: the floor moves to the current epoch and the rungs below go, with no statement. The
+    // group still reads cleanly; an envelope below the floor is out of reach as history, not a broken ladder.
+    bridge.eraFloor = static_cast<std::int64_t>(bridge.tree.state.epoch);
+    bridge.rungs.erase(
+        std::remove_if(
+            bridge.rungs.begin(), bridge.rungs.end(),
+            [&](const server::GroupArchiveRung& rung) { return rung.targetKeyVersion < bridge.eraFloor; }
+        ),
+        bridge.rungs.end()
+    );
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult& result) { result = server::GroupGetEpochKeysResult{}; };
+    const Group read = client("carol").getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.privateMeta.stdString(), "private");
+    // The Bridge deletes the archived epoch keys below the floor too: the envelope's key is simply not published.
+    try {
+        client("carol").decrypt(groupId, NOWHERE, sealed, ANY);
+        ADD_FAILURE() << "epoch 1 opened below the era floor";
+    } catch (const GroupDataIntegrityException& e) {
+        ADD_FAILURE() << "read as an integrity failure: " << e.what();
+    } catch (const std::exception& e) {
+        EXPECT_EQ(std::string(e.what()).find("verification failed"), std::string::npos) << e.what();
+    }
+    // With the epoch key still served the descent stops at the floor: out of reach, not tampered with.
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    try {
+        client("bob").decrypt(groupId, NOWHERE, sealed, ANY);
+        ADD_FAILURE() << "epoch 1 opened below the era floor";
+    } catch (const GroupDataIntegrityException& e) {
+        ADD_FAILURE() << "read as an integrity failure: " << e.what();
+    } catch (const std::exception& e) {
+        EXPECT_EQ(std::string(e.what()).find("verification failed"), std::string::npos) << e.what();
     }
 }
 

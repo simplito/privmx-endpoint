@@ -121,7 +121,7 @@ protected:
         group.publicMetaVersion = publicMetaVersion;
         group.privateMetaVersion = privateMetaVersion;
         group.keyVersion = keyVersion;
-        group.policy = policyOf({}); // the default rules
+        group.policy = policyOf({}); // every rule the managers'
         const int64_t publicMetaEpoch = publicMetaKeyVersion.value_or(keyVersion);
         const int64_t privateMetaEpoch = privateMetaKeyVersion.value_or(keyVersion);
 

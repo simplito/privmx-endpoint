@@ -44,7 +44,7 @@ RULE_FIELDS = [
     "addMembers", "removeMembers", "replaceMemberKeys", "changeRoles", "changeRules", "changeVisibility", "trimHistory",
     "editPublicMeta", "editPrivateMeta",
 ]
-DEFAULT_RULES = {field: "managers" for field in RULE_FIELDS}
+ALL_MANAGERS = {field: "managers" for field in RULE_FIELDS}
 
 
 def u8(v):
@@ -98,32 +98,32 @@ def signed_bytes(s):
 
 
 EXPLICIT = dict(
-    DEFAULT_RULES, addMembers="members", removeMembers="nobody", replaceMemberKeys="members", trimHistory="nobody",
+    ALL_MANAGERS, addMembers="members", removeMembers="nobody", replaceMemberKeys="members", trimHistory="nobody",
     editPublicMeta="members",
 )
-IMMUTABLE = dict(DEFAULT_RULES, addMembers="nobody", removeMembers="nobody", changeRoles="nobody", changeRules="nobody")
+IMMUTABLE = dict(ALL_MANAGERS, addMembers="nobody", removeMembers="nobody", changeRoles="nobody", changeRules="nobody")
 
 # The first five are the Bridge's own conformance vectors.
 RULES = [
-    (dict(DEFAULT_RULES), "alice"),
-    (dict(DEFAULT_RULES), "bob"),
+    (dict(ALL_MANAGERS), "alice"),
+    (dict(ALL_MANAGERS), "bob"),
     (dict(EXPLICIT), "alice"),
     ({field: "members" for field in RULE_FIELDS}, "alice"),
-    (dict(DEFAULT_RULES, changeRoles="nobody", changeRules="nobody", changeVisibility="members", editPrivateMeta="members"),
+    (dict(ALL_MANAGERS, changeRoles="nobody", changeRules="nobody", changeVisibility="members", editPrivateMeta="members"),
      "alice"),
     (dict(IMMUTABLE), "alice"),
 ]
 
 # Rules objects both sides refuse: a field missing, one unknown, a value outside the field's set, the old grammar.
 INVALID_RULES = [
-    {k: v for k, v in DEFAULT_RULES.items() if k != "trimHistory"},
-    dict(DEFAULT_RULES, history="shared"),
-    dict(DEFAULT_RULES, manage="managers"),
-    dict(DEFAULT_RULES, addMembers="manager"),
-    dict(DEFAULT_RULES, removeMembers="manager,owner"),
-    dict(DEFAULT_RULES, editPublicMeta="all"),
-    dict(DEFAULT_RULES, editPrivateMeta=""),
-    dict(DEFAULT_RULES, addMembers=1),
+    {k: v for k, v in ALL_MANAGERS.items() if k != "trimHistory"},
+    dict(ALL_MANAGERS, history="shared"),
+    dict(ALL_MANAGERS, manage="managers"),
+    dict(ALL_MANAGERS, addMembers="manager"),
+    dict(ALL_MANAGERS, removeMembers="manager,owner"),
+    dict(ALL_MANAGERS, editPublicMeta="all"),
+    dict(ALL_MANAGERS, editPrivateMeta=""),
+    dict(ALL_MANAGERS, addMembers=1),
     {},
 ]
 
@@ -133,7 +133,7 @@ REMOVAL = {
     "date": 1760000000000, "keyVersion": 4, "groupPubKey": "GPK", "rosterVersion": 9,
     "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
     "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
-    "policyHash": rules_hash(DEFAULT_RULES, "alice"),
+    "policyHash": rules_hash(ALL_MANAGERS, "alice"),
     "committer": "alice", "committerPubKey": "APK", "committerSeat": 0,
     "path": [{"nodeIndex": 3, "generation": 2, "publicKey": "pk3", "subtreeHash": "11" * 32}],
     "addedUsers": [], "addedManagers": [], "removed": ["bob"],

@@ -525,7 +525,8 @@ JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
     F(rungs, std::vector<GroupArchiveRung>)                                                                            \
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
-    F(expectedRosterVersion, int64_t)
+    F(expectedRosterVersion, int64_t)                                                                                  \
+    F(cutHistory, std::optional<bool>)
 JSON_STRUCT(GroupGenerateNewKeyModel, GROUP_GENERATE_NEW_KEY_MODEL_FIELDS);
 
 // Refills the caller's own keyed path: no epoch change, no roster change, nothing for anybody else to notice.
@@ -549,18 +550,6 @@ JSON_STRUCT(GroupGetTreeCommitsModel, GROUP_GET_TREE_COMMITS_MODEL_FIELDS);
     F(genesisUsers, std::optional<std::vector<std::string>>)                                                           \
     F(genesisManagers, std::optional<std::vector<std::string>>)
 JSON_STRUCT(GroupGetTreeCommitsResult, GROUP_GET_TREE_COMMITS_RESULT_FIELDS);
-
-#define GROUP_CUT_ERA_MODEL_FIELDS(F)                                                                                  \
-    F(id, std::string)                                                                                                 \
-    F(newFloor, int64_t)                                                                                               \
-    F(expectedKeyVersion, int64_t)
-JSON_STRUCT(GroupCutEraModel, GROUP_CUT_ERA_MODEL_FIELDS);
-
-#define GROUP_PRUNE_ARCHIVE_MODEL_FIELDS(F)                                                                            \
-    F(id, std::string)                                                                                                 \
-    F(belowEpoch, int64_t)                                                                                             \
-    F(expectedKeyVersion, int64_t)
-JSON_STRUCT(GroupPruneArchiveModel, GROUP_PRUNE_ARCHIVE_MODEL_FIELDS);
 
 // One more rung for a span an epoch already published; the bridge records the caller as its author.
 #define GROUP_REPAIR_RUNG_MODEL_FIELDS(F)                                                                              \

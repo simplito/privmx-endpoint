@@ -211,6 +211,7 @@ inline const std::unordered_map<std::string, func_enum> functions_endpoint = {
     {"group.addGroupMembers", group_addGroupMembers},
     {"group.removeGroupMembers", group_removeGroupMembers},
     {"group.rotateGroupKey", group_rotateGroupKey},
+    {"group.cutHistory", group_cutHistory},
     {"group.updateGroupPublicMeta", group_updateGroupPublicMeta},
     {"group.updateGroupPrivateMeta", group_updateGroupPrivateMeta},
     {"group.updateGroupRules", group_updateGroupRules},

@@ -52,7 +52,7 @@ inline privmx::endpoint::core::EventHolder nextEvent(const std::string& type) {
     throw std::runtime_error("no " + type + " event");
 }
 
-// A group's rules object as the bridge stores and serves it: every rule "managers" (the defaults) but those given.
+// A group's rules object as the bridge stores and serves it: every rule "managers" but those given.
 inline Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rules) {
     Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
     for (const char* field :
