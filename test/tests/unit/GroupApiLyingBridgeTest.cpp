@@ -128,6 +128,7 @@ struct Bridge {
     std::function<void()> beforeRotation = [] {}; // runs as a rotation arrives, before it is checked
     // Edits a rotation's statement as stored.
     std::function<void(server::GroupTreeCommit&)> onRotationCommit = [](server::GroupTreeCommit&) {};
+    std::vector<std::string> spaceListsFor; // the groupId of each `spaceList` asked for
     std::function<void()> afterRotation = [] {};  // runs once the rotation is applied; throws to lose the answer
     std::function<void()> onAdd = [] {};
     std::function<void()> afterAdd = [] {}; // runs once the add is applied; throws to lose the answer
@@ -460,6 +461,18 @@ struct Bridge {
                 );
             }
             storeNewEpoch(caller, model);
+            if (model.cutHistory.value_or(false)) {
+                // The archived epoch keys below the floor go with the rungs.
+                for (auto& entry : *rest.groupKeys) {
+                    entry.keys.erase(
+                        std::remove_if(
+                            entry.keys.begin(), entry.keys.end(),
+                            [&](const auto& key) { return key.groupEpoch.value_or(eraFloor) < eraFloor; }
+                        ),
+                        entry.keys.end()
+                    );
+                }
+            }
             afterRotation();
             return Poco::Dynamic::Var();
         }
@@ -572,6 +585,11 @@ struct Bridge {
         }
         if (group == "groupDelete") {
             return Poco::Dynamic::Var();
+        }
+        if (group == "spaceList") {
+            // No Space here: the listing is what is checked (`spaceListsFor`).
+            spaceListsFor.push_back(server::SpaceListModel::fromJSON(params).groupId.value_or(""));
+            return server::SpaceListResult{.spaces = {}, .count = 0}.toJSON();
         }
         throw std::runtime_error("the fake bridge has no " + method);
     }
@@ -3525,6 +3543,50 @@ TEST_F(GroupApiLyingBridge, ACutNeedsTheEditRuleOfEachPlaneItCarries) {
     );
     EXPECT_THROW(client("bob").cutHistory(groupId), GroupUnauthorizedSignerException);
     EXPECT_EQ(count("bob", "context.groupGenerateNewKey"), 0u);
+}
+
+TEST_F(GroupApiLyingBridge, ACutWhoseAnswerWasLostIsFollowedUpByTheCallThatFindsItLanded) {
+    // The cut lands, its answer is lost. The keys below the new floor are gone, so a later call settling it must carry
+    // the planes as they were opened before the cut, and look for the Spaces to re-key. Not `quiet`: the follow-up is
+    // due work.
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}}));
+    int rotations = 0;
+    bridge.afterRotation = [&] {
+        if (rotations++ == 0) {
+            throw std::runtime_error("connection dropped");
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").cutHistory(groupId));
+    EXPECT_EQ(bridge.tree.state.epoch, 2u) << "the cut landed";
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 1) << "nothing carried yet";
+    EXPECT_TRUE(bridge.spaceListsFor.empty());
+    // A later call settles it: it finds the cut landed and runs its follow-up.
+    EXPECT_NO_THROW(client("alice").cutHistory(groupId));
+    EXPECT_EQ(bridge.received.size(), 1u) << "the landed cut was not sent again";
+    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2);
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2);
+    EXPECT_EQ(bridge.rest.privateMeta.author, "alice");
+    EXPECT_EQ(std::count(bridge.spaceListsFor.begin(), bridge.spaceListsFor.end(), groupId), 1)
+        << "the Spaces naming the group were looked for";
+    for (const std::string id : {"bob", "carol"}) {
+        const Group read = client(id).getGroup(groupId);
+        EXPECT_EQ(read.statusCode, 0) << id;
+        EXPECT_EQ(read.privateMeta.stdString(), "private") << id;
+    }
+}
+
+TEST_F(GroupApiLyingBridge, ACutStartsAPlaneItCouldNotAttestOverEmpty) {
+    // bob, a plain member, wrote the public plane without editPublicMeta: refused by every reader. Its key goes below
+    // the floor with the cut, so it could never be opened again: the follow-up starts the planes over, empty.
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}}));
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
+    ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_EQ(client("alice").cutHistory(groupId), 2);
+    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2);
+    EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
+    const Group read = client("carol").getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_TRUE(read.publicMeta.stdString().empty());
 }
 
 TEST_F(GroupApiLyingBridge, ACutNeedsTrimHistory) {

@@ -186,7 +186,8 @@ public:
      *
      * Allowed by the `trimHistory` rule ("nobody" by default) together with `editPublicMeta` and
      * `editPrivateMeta` (both metadata planes sit below the new floor and are carried up to the new epoch under
-     * the caller's name), all checked before anything is signed. Charged to the rotation budget like
+     * the caller's name), all checked before anything is signed. `trimHistory` is enforced by the Bridge only: a cut
+     * is signed as an ordinary rotation, so readers cannot tell a cut made by a member without the rule. Charged to the rotation budget like
      * rotateGroupKey; containers granted to the Group go stale and are re-keyed onto the new epoch.
      *
      * Every Space naming the Group is re-keyed afterwards (rotateSpaceKey), which moves its entry for the Group to

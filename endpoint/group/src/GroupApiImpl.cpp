@@ -277,42 +277,68 @@ int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
 
 int64_t GroupApiImpl::cutHistory(const std::string& groupId) {
     _metadata.retryPendingCarry(groupId);
-    bool committedHere = true;
     PriorRole prior;
-    Group opened{};
-    CommitEngine::commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior, true, &opened); });
-    // As after a rotation. The cutter still holds the cut epoch's key, so the planes are carried with what they say.
-    if (committedHere) {
-        const auto session = _sessions.of(groupId);
-        std::lock_guard<std::mutex> lock(session->mutex);
-        session->pendingCut = std::make_pair(prior, opened);
-    }
+    // The follow-up (planes carried up, Spaces re-keyed) is queued by the cut once it lands, here or in the `settle`
+    // of whichever later call finds it landed after a lost answer; the due work below runs it.
+    CommitEngine::commitWithRetry([&] { _ops.rotate(groupId, prior, true); });
     const int64_t epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
     runDueWork(groupId);
     return epoch;
 }
 
+namespace {
+// Whether a Space's re-key after a cut was refused for good: the Bridge's or this client's word that the caller may
+// not, rather than a lost race, a rate limit or a failed request, which a later call retries.
+bool refusedForGood(const std::exception& e) {
+    if (dynamic_cast<const GroupUnauthorizedSignerException*>(&e) != nullptr ||
+        dynamic_cast<const SpaceRecipientUnavailableException*>(&e) != nullptr) {
+        return true;
+    }
+    const auto* rejection = dynamic_cast<const core::Exception*>(&e);
+    if (rejection == nullptr ||
+        (rejection->getCode() >> 16) != privmx::endpoint::server::EndpointServerException::SCOPE_CODE) {
+        return false;
+    }
+    for (const unsigned int transient :
+         {privmx::endpoint::server::GroupRotatedAlreadyException::FULL_CODE,
+          privmx::endpoint::server::GroupVersionMismatchException::FULL_CODE,
+          privmx::endpoint::server::GroupRotationRateLimitException::FULL_CODE,
+          privmx::endpoint::server::GroupRosterVersionMismatchException::FULL_CODE}) {
+        if (rejection->getCode() == transient) {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
 void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
-    std::optional<std::pair<PriorRole, Group>> prior;
+    std::optional<PendingCut> pending;
     {
         const auto session = _sessions.find(groupId);
         if (!session) {
             return;
         }
         std::lock_guard<std::mutex> lock(session->mutex);
-        prior = std::exchange(session->pendingCut, std::nullopt); // taken: a Space write below runs due work too
+        pending = std::exchange(session->pendingCut, std::nullopt); // taken: a Space write below runs due work too
     }
-    if (!prior.has_value()) {
+    if (!pending.has_value()) {
         return;
     }
-    // The planes as opened before the cut: their keys below the new floor are gone. Not attested then, not carried.
-    bool done = prior->second.statusCode != 0 ||
+    // The planes as opened before the cut: their keys below the new floor are gone. A plane not attested then can
+    // never be opened now: started over empty, as a removal that abandons history does.
+    bool done = pending->opened.statusCode == 0 ?
         _metadata.carryMetadataForward(
-            groupId, CarryScope::NewEpoch, false, prior->first, false, false, &prior->second
-        );
+            groupId, CarryScope::NewEpoch, false, pending->prior, false, false, &pending->opened
+        ) :
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, true, pending->prior);
     try {
         const std::string contextId = readGroupForKeys(groupId)->contextId;
         const auto epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
+        LOG_INFO(
+            "[cutHistory] group ", groupId, ": Spaces naming it that this user cannot see are not re-keyed here; they",
+            " stay stale until a recipient rotates them"
+        )
         for (int64_t skip = 0;; skip += 100) {
             const auto page = listSpaces(
                 contextId, core::PagingQuery{.skip = skip, .limit = 100, .sortOrder = "asc"}, groupId
@@ -321,14 +347,22 @@ void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
                 const bool behind = std::any_of(space.groups.begin(), space.groups.end(), [&](const auto& g) {
                     return g.groupId == groupId && g.keyVersion < epoch;
                 });
-                if (!behind) {
+                if (!behind || pending->givenUp.count(space.spaceId) != 0) {
                     continue;
                 }
                 try {
                     rotateSpaceKey(space.spaceId);
                 } catch (const std::exception& e) {
-                    done = false;
-                    LOG_WARN("[cutHistory] Space ", space.spaceId, " not refreshed past the cut: ", e.what())
+                    if (refusedForGood(e)) {
+                        pending->givenUp.insert(space.spaceId);
+                        LOG_WARN(
+                            "[cutHistory] Space ", space.spaceId,
+                            " cannot be re-keyed by this user; it stays stale: ", e.what()
+                        )
+                    } else {
+                        done = false;
+                        LOG_WARN("[cutHistory] Space ", space.spaceId, " not re-keyed yet, retried later: ", e.what())
+                    }
                 }
             }
             if (page.readItems.size() < 100) {
@@ -337,13 +371,13 @@ void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
         }
     } catch (const std::exception& e) {
         done = false;
-        LOG_WARN("[cutHistory] the Spaces of group ", groupId, " were not refreshed: ", e.what())
+        LOG_WARN("[cutHistory] the Spaces of group ", groupId, " were not re-keyed yet: ", e.what())
     }
     if (!done) {
         const auto session = _sessions.of(groupId);
         std::lock_guard<std::mutex> lock(session->mutex);
         if (!session->pendingCut.has_value()) {
-            session->pendingCut = prior; // kept for the next call's due work
+            session->pendingCut = pending; // kept for the next call's due work
         }
     }
 }

@@ -97,8 +97,15 @@ public:
     // out to have landed (`settle` ran its metadata refresh then).
     // `cutHistory`: the new epoch publishes no rung down and the Bridge raises the era floor to it (needs
     // `trimHistory`, checked before signing).
-    // `opened`: a cut's planes as opened on its read, for the carry after it (the keys below the floor go).
-    bool rotate(const std::string& groupId, PriorRole& prior, bool cutHistory = false, Group* opened = nullptr) const;
+    // A cut queues its follow-up (`GroupSession::pendingCut`) once it lands, here or in the `settle` of a later call
+    // that finds it landed; `runDueWork` runs it.
+    bool rotate(const std::string& groupId, PriorRole& prior, bool cutHistory = false) const;
+    static void queueCutFollowUp(
+        GroupSessions& sessions,
+        const std::string& groupId,
+        const PriorRole& prior,
+        const Group& opened
+    );
     // A self-update; with `previousKey`, the leaf renewal: no need gates, a climb with the previous key over a
     // call-local cache, signed with the session's (new) key. False when there was nothing to commit (no need, the
     // leaf already opens with the session's key, or deferred behind another commit).

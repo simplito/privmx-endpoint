@@ -72,7 +72,10 @@ struct GroupRules {
     std::string changeRules;
     /** Who may set the Group's visibility (GroupApi::setGroupVisibility). The visibility itself is not signed. */
     std::string changeVisibility;
-    /** Who may cut the Group's history off (GroupApi::cutHistory); "nobody" by default. */
+    /**
+     * Who may cut the Group's history off (GroupApi::cutHistory); "nobody" by default. Enforced by the Bridge only:
+     * a cut is signed as an ordinary rotation, so readers cannot tell a cut made by a member without the rule.
+     */
     std::string trimHistory;
     /** Who may rewrite the Group's public metadata. */
     std::string editPublicMeta;
