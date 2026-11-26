@@ -45,7 +45,6 @@ public:
     virtual std::string sign(const std::string& data) const = 0;
     virtual bool verify(const std::string& data, const std::string& signature) const = 0;
     virtual std::string derive(const ECCImpl::Ptr ecc) const = 0;
-    virtual std::string getOrder() const = 0;
     virtual bool hasPrivate() const = 0;
 };
 

@@ -29,7 +29,6 @@ public:
     virtual std::string randomBytes(size_t length) const  = 0;
     virtual std::string hmacSha256(const std::string& key, const std::string& data) const  = 0;
     virtual std::string sha256(const std::string& data) const  = 0;
-    virtual std::string hash160(const std::string& data) const  = 0;
     virtual std::string aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv) const  = 0;
     virtual std::string aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv) const  = 0;
     virtual std::string aes256CbcPkcs7Encrypt(const std::string& data, const std::string& key, const std::string& iv) const  = 0;

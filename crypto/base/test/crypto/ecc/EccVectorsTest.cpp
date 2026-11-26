@@ -159,16 +159,9 @@ TEST(EccVectorsTest, SharedSecret) {
     EXPECT_EQ("080b82140316bac00c39bd3cf10a1c6568b035f3c8e8387a2cfdd00938abd1a6", hex(ab));
 }
 
-/**
- * The secp256k1 group order, which `ExtKey` needs for BIP32 child derivation.
- *
- * It is a published domain parameter, not something computed from a key — note that the driver's
- * own entry point takes no key argument either.
- */
-TEST(EccVectorsTest, CurveOrder) {
-    const ECC key = ECC::fromPrivateKey(privateScalar());
-    EXPECT_EQ("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", hex(key.getOrder()));
-}
+// The curve order used to be pinned here, next to `ECC::getOrder`. Both are gone: the order was a
+// hand-written domain parameter whose only caller was BIP32 child derivation in the legacy `ExtKey`,
+// and pmx-crypto's `IExtKey` derives children itself.
 
 } // namespace
 } // namespace crypto

@@ -52,7 +52,6 @@ public:
     std::string sign(const std::string& data) const override;
     bool verify(const std::string& data, const std::string& signature) const override;
     std::string derive(const privmx::crypto::ECCImpl::Ptr ecc) const override;
-    std::string getOrder() const override;
     bool hasPrivate() const override;
 
     std::shared_ptr<privmx::cryptoservice::IPublicKey> publicKeyHandle() const { return _pub; }

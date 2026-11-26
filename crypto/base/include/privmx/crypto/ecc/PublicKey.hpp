@@ -30,7 +30,6 @@ public:
     bool operator!=(const PublicKey& obj) const;
     std::string toDER() const;
     std::string toBase58DER() const;
-    std::string toBase58Address() const;
     bool verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const;
     const ECC& getEcc() const;
 

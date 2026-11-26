@@ -39,7 +39,6 @@ public:
     std::string randomBytes(size_t length) const override;
     std::string hmacSha256(const std::string& key, const std::string& data) const override;
     std::string sha256(const std::string& data) const override;
-    std::string hash160(const std::string& data) const override;
     std::string aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv)
         const override;
     std::string aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv)

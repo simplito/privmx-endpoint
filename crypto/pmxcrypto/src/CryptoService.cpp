@@ -152,19 +152,9 @@ std::string pmximpl::CryptoService::pbkdf2(
 // `CompositionVectorsTest`: golden vectors computed from an independent model of each construction,
 // which passed against the previous hand-written implementation and pass against this one.
 //
-// `hash160` and `ctDecrypt` below stay local - they are byte layout (a digest of a digest, a
-// one-byte cipher-type prefix), not cryptographic constructions, and pmx-crypto has no equivalent
-// to delegate to.
+// `ctDecrypt` below stays local - it is byte layout (a one-byte cipher-type prefix), not a
+// cryptographic construction, and pmx-crypto has no equivalent to delegate to.
 // ---------------------------------------------------------------------------------------------
-
-// RIPEMD-160 over SHA-256, taken straight from the provider: it is the only caller of either digest
-// in that combination, so neither needs to be a method of its own on this service.
-string pmximpl::CryptoService::hash160(const string& data) const {
-    return mapped("hash160", [&] {
-        const cs::Bytes sha = cryptoProvider().digest(cs::Hash::Sha256, view(data));
-        return str(cryptoProvider().digest(cs::Hash::Ripemd160, cs::BytesView(sha.data(), sha.size())));
-    });
-}
 
 string pmximpl::CryptoService::prf_tls12(const string& key, const string& seed, size_t length) const {
     return mapped("prf_tls12", [&] {

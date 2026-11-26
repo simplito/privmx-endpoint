@@ -31,7 +31,6 @@ public:
     std::string getPrivateEncKey() const;
     std::string signToCompactSignatureWithHash(const std::string& message) const;
     std::string derive(const PublicKey& public_key) const;
-    ECC getEccKey() const;
     std::string toWIF() const;
 
 private:
@@ -40,10 +39,6 @@ private:
 
 inline PublicKey PrivateKey::getPublicKey() const {
     return PublicKey(_key);
-}
-
-inline ECC PrivateKey::getEccKey() const {
-    return _key;
 }
 
 } // crypto

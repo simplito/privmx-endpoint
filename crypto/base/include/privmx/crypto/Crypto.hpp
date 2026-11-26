@@ -28,8 +28,9 @@ namespace crypto {
  * without asking which format it belongs to. New code uses `core::CryptoSuite` and `core::FormatHash`.
  *
  * What went, and why it is not coming back by accident:
- *   - `sha1`, `sha512`, `ripemd160`, `hmacSha1`, `hmacSha512` — no callers. `hash160` still hashes a
- *     digest of a digest, it just does it inside `CryptoService` now.
+ *   - `sha1`, `sha512`, `ripemd160`, `hmacSha1`, `hmacSha512` — no callers.
+ *   - `hash160` — its only caller was `ecc::PublicKey::toBase58Address`, a bitcoin-style address
+ *     that nothing asked for any more: an identity travels as `Base58Check(tag || rawKey)`.
  *   - `aes256Gcm*` — no callers; GCM is reached through `core::CryptoSuite`.
  *   - `aes256Ecb*` — replaced by `aes256CbcNoPad*`. Its one caller encrypts a single 16-byte block
  *     (the rpc frame header), and for one block CBC with an all-zero IV is the same bytes: CBC is
@@ -47,7 +48,6 @@ public:
     static std::string randomBytes(size_t length);
     static std::string hmacSha256(const std::string& key, const std::string& data);
     static std::string sha256(const std::string& data);
-    static std::string hash160(const std::string& data);
     static std::string aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv);
     static std::string aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv);
     static std::string aes256CbcPkcs7Encrypt(const std::string& data, const std::string& key, const std::string& iv);
@@ -71,11 +71,6 @@ inline std::string Crypto::hmacSha256(const std::string& key, const std::string&
 inline std::string Crypto::sha256(const std::string& data) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->sha256(data);
-}
-
-inline std::string Crypto::hash160(const std::string& data) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->hash160(data);
 }
 
 inline std::string Crypto::aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv) {

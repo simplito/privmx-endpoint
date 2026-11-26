@@ -12,7 +12,6 @@ limitations under the License.
 #include <privmx/crypto/CipherType.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/CryptoPrivmx.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
 
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
@@ -96,9 +95,8 @@ core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const
     return core::Buffer::from(core::CryptoSuite::decrypt(key.stdString(), framed));
 }
 
-// Zwraca WIF, a nie obiekt klucza: `ExtKey` nalezy jeszcze do starego stosu (wydzielenie BIP32
-// do osobnej biblioteki to osobne zadanie), wiec oddawanie `privmx::crypto::PrivateKey` wyciagaloby
-// ten typ do naglowka. Jedyny konsument i tak potrzebuje tylko WIF-a.
+// Returns a WIF rather than a key object: the only consumer needs nothing else, and handing back a
+// key would pull its type into the header for no gain.
 std::string CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed, size_t rounds) {
     auto salt{core::CryptoSuite::randomBytes(16)};
     auto pbkdf2{privmx::crypto::Crypto::pbkdf2(seed, salt, rounds, 32, "SHA512")};

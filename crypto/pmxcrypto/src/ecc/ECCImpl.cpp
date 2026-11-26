@@ -46,19 +46,6 @@ auto mapped(const char* what, Operation&& operation) -> decltype(operation()) {
 }
 
 /**
- * The order of the secp256k1 group, as the 32 bytes `ECC::getOrder` has always returned.
- *
- * A published domain parameter, not a property of any particular key — the entry point it replaces
- * took no key argument either and handed back this same constant. pmx-crypto exposes no accessor
- * for it, and the only caller is BIP32 child derivation in `ExtKey`, where every reference
- * implementation carries the same literal.
- */
-const unsigned char SECP256K1_ORDER[32] = {
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
-    0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41,
-};
-
-/**
  * The leading byte of a compact signature.
  *
  * Written as a constant, exactly as the driver did, rather than derived from a recovery id. It is
@@ -225,6 +212,3 @@ string pmximpl::ECCImpl::derive(const privmx::crypto::ECCImpl::Ptr ecc) const {
     return mapped("eccDerive", [&] { return str(_priv->deriveSharedSecret(other->publicKeyHandle())); });
 }
 
-string pmximpl::ECCImpl::getOrder() const {
-    return string(reinterpret_cast<const char*>(SECP256K1_ORDER), sizeof(SECP256K1_ORDER));
-}

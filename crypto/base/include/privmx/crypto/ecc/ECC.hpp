@@ -36,14 +36,11 @@ public:
     ECC(ECCImpl::Ptr impl);
     ECC& operator=(const ECC& obj);
     ECC& operator=(ECC&& obj);
-    operator bool() const;
-    bool isEmpty() const;
     std::string getPublicKey(bool compact = true) const;
     std::string getPrivateKey() const;
     std::string sign(const std::string& data) const;
     bool verify(const std::string& data, const std::string& signature) const;
     std::string derive(const ECC& ecc) const;
-    std::string getOrder() const;
     bool hasPrivate() const;
     ECCImpl::Ptr getImpl() const;
 
@@ -91,14 +88,6 @@ inline ECC& ECC::operator=(ECC&& obj) {
 }
 
 
-inline ECC::operator bool() const {
-    return !_impl->isEmpty();
-}
-
-inline bool ECC::isEmpty() const {
-    return _impl->isEmpty();
-}
-
 inline std::string ECC::getPublicKey(bool compact) const {
     return _impl->getPublicKey(compact);
 }
@@ -117,10 +106,6 @@ inline bool ECC::verify(const std::string& data, const std::string& signature) c
 
 inline std::string ECC::derive(const ECC& ecc) const {
     return _impl->derive(ecc.getImpl());
-}
-
-inline std::string ECC::getOrder() const {
-    return _impl->getOrder();
 }
 
 inline bool ECC::hasPrivate() const {

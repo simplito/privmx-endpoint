@@ -47,12 +47,6 @@ string PublicKey::toBase58DER() const {
     return Base58::encodeWithChecksum(_key.getPublicKey(), Crypto::sha256);
 }
 
-string PublicKey::toBase58Address() const {
-    string hash = Crypto::hash160(_key.getPublicKey());
-    string payload = Networks::BITCOIN.PUB_KEY_HASH + hash;
-    return Base58::encodeWithChecksum(payload, Crypto::sha256);
-}
-
 /// The verifying half of `PrivateKey::signToCompactSignatureWithHash` — see there for why the message
 /// goes in whole: `ECC::verify` digests it, and hashing first as well would check the wrong digest.
 bool PublicKey::verifyCompactSignatureWithHash(const string& message, const string& signature) const {
