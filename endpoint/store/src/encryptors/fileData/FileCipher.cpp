@@ -67,7 +67,14 @@ struct CipherSpec {
  * The registry of file data formats.
  *
  * Format 1's constants come from `StoreTypes.hpp`, because those described this format before it
- * had a name. A `cipherType` value that has been issued must never be redefined.
+ * had a name.
+ *
+ * A `cipherType` value that has been issued must not be redefined — a file names its format by this
+ * number and nothing else, so redefining one silently changes what an existing file means. All
+ * three were redefined once, at 3.0.0, when `chunkKey` moved to HMAC; 3.0.0 breaks formats by
+ * design, and issuing three new ids for a derivation change nobody was meant to keep reading would
+ * have doubled the registry to describe data that no longer exists. That was a one-off licensed by
+ * the release, not a precedent.
  */
 constexpr std::size_t GCM_IV_LENGTH = 12;
 constexpr std::size_t GCM_TAG_LENGTH = 16;
@@ -75,9 +82,9 @@ constexpr std::size_t GCM_TAG_LENGTH = 16;
 /**
  * The key length every format here cipher with — all three are AES-256.
  *
- * Named separately from the hash, because the two are independent: the chunk key is a *digest*, and
- * a digest is as long as the hash function that made it. SHA-512 gives 64 bytes where AES-256 wants
- * 32, so the digest has to be cut to size rather than handed over whole. See `chunkKey`.
+ * Named separately from the hash, because the two are independent: the chunk key is an HMAC output,
+ * and that is as long as the hash function underneath it. HMAC-SHA512 gives 64 bytes where AES-256
+ * wants 32, so it has to be cut to size rather than handed over whole. See `chunkKey`.
  */
 constexpr std::size_t CIPHER_KEY_LENGTH = 32;
 
@@ -171,6 +178,15 @@ std::string symDecrypt(cs::SymAlg alg, const std::string& key, const std::string
     return str(core::cryptoProvider().decrypt(params, view(cipher)));
 }
 
+/**
+ * Domain label on the per-chunk key derivation. See `chunkKey`.
+ *
+ * It mirrors `GroupEnvelopeEncryptor::CHUNK_KEY_LABEL` ("privmx/group/file-chunk"), which derives a
+ * chunk key off a group file key for the same purpose. The two labels differ so that the same
+ * 32 bytes used as a file key on both sides could not yield the same chunk key.
+ */
+const std::string CHUNK_KEY_LABEL = "privmx/store/file-chunk";
+
 std::string indexToBE(std::uint64_t index) {
     std::uint32_t indexBE = Poco::ByteOrder::toBigEndian(static_cast<std::uint32_t>(index));
     return std::string(reinterpret_cast<char*>(&indexBE), 4);
@@ -227,24 +243,34 @@ std::size_t FileCipher::paddingBlock() const {
 }
 
 std::string FileCipher::chunkKey(const std::string& fileKey, std::uint64_t index) const {
-    // The hash comes from the format's suite, not from a constant. For formats 1 and 2 that is
-    // SHA-256 — exactly what `Crypto::sha256` computed here before, so files written earlier read
-    // unchanged. Format 3 computes the same thing with SHA-512, which is why it has its own
-    // `cipherType`.
-    const std::string digest = core::CryptoSuite::forId(requireSpec(_type).hashSuite).hash(fileKey + indexToBE(index));
-    // Cut to the cipher's key length, which the hash knows nothing about: SHA-512 gives 64 bytes and
-    // AES-256 takes 32. Formats 1 and 2 hash with SHA-256 and this is a no-op for them, so nothing
-    // already on disk changes meaning — and it does not change what format 3 writes either, because
-    // OpenSSL reads the first 32 bytes of whatever it is handed and silently ignores the rest. That
-    // is precisely the problem: it is the provider's missing length check (pmx-crypto passes
-    // `key.data()` straight through — see `issue-pmx-crypto-key-iv-length`) that made the oversized
-    // key work at all, so format 3 would have broken on the day that check was added. Note that
+    // HMAC, keyed by the file key, over the label and the index. Until 3.0.0 this was the bare
+    // digest `H(fileKey || BE32(index))`, which is the construction HMAC exists to replace: a
+    // Merkle-Damgard hash of secret-then-data is not a PRF, and the index sat in the same
+    // unseparated byte string as the key. Nothing here was exploitable — the derived keys never
+    // leave the client — but it was the wrong primitive for a key derivation, and the group side
+    // already did it the right way (`GroupEnvelopeEncryptor::chunkKey`). 3.0.0 carries no backward
+    // compatibility, so the two could finally be brought into line instead of a fourth `cipherType`
+    // being issued for the difference.
+    //
+    // Binding the index makes a chunk unusable in any other position, binding the file key makes it
+    // unusable in any other file, and the label keeps this separate from any future derivation off
+    // the same key.
+    //
+    // The hash is the format's, not a constant: formats 1 and 2 are SHA-256 and format 3 SHA-512,
+    // which is the whole of what format 3 is.
+    const std::string prf =
+        core::CryptoSuite::forId(requireSpec(_type).hashSuite).mac(fileKey, CHUNK_KEY_LABEL + indexToBE(index));
+    // Cut to the cipher's key length, which the hash knows nothing about: HMAC-SHA512 gives 64 bytes
+    // and AES-256 takes 32. For formats 1 and 2 this is a no-op. It matters for format 3, and not
+    // only cosmetically: pmx-crypto passes `key.data()` straight through without a length check
+    // (`issue-pmx-crypto-key-iv-length`) and OpenSSL then reads the first 32 bytes in silence, so an
+    // oversized key appears to work right up until that check is added. Note that
     // `CryptoSuite::encrypt` does check, and would have caught this; `store` goes to the provider
     // directly because the suite's frame is not the file's frame (see `symEncrypt`).
     //
     // Both registered hash suites yield at least 32 bytes, so this never shortens a key below the
     // cipher's requirement; a shorter hash would need its own key derivation, not a `substr`.
-    return digest.substr(0, CIPHER_KEY_LENGTH);
+    return prf.substr(0, CIPHER_KEY_LENGTH);
 }
 
 IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, const std::string& plain) const {

@@ -23,7 +23,7 @@ limitations under the License.
  *
  * Chunk format 1 (cipherType = 1):
  *     [32 B HMAC-SHA256][16 B IV][AES-256-CBC + PKCS#7]
- *   chunkKey = sha256(fileKey || BE32(index))
+ *   chunkKey = hmacSha256(fileKey, "privmx/store/file-chunk" || BE32(index))
  *   the HMAC is computed with chunkKey over (IV || ciphertext)
  *
  * Chunk format 2 (cipherType = 2):
@@ -109,7 +109,8 @@ TEST(StoreFileFormat, ChunkKeyAndHmacFollowTheDocumentedFormula) {
     const auto chunk = encryptor.encrypt(index, repeat('b', 64));
 
     const std::string indexBE("\x00\x00\x00\x07", 4);
-    const std::string expectedChunkKey = privmx::crypto::Crypto::sha256(KEY + indexBE);
+    const std::string expectedChunkKey =
+        privmx::crypto::Crypto::hmacSha256(KEY, std::string("privmx/store/file-chunk") + indexBE);
     const std::string ivWithCipher = chunk.data.substr(HMAC_SIZE);
 
     EXPECT_EQ(privmx::crypto::Crypto::hmacSha256(expectedChunkKey, ivWithCipher), chunk.hmac);
@@ -506,6 +507,27 @@ TEST(StoreFileCipher, ChunkKeyIsTheCiphersKeyLengthInEveryFormat) {
     for (const int64_t type : FileCipher::known()) {
         EXPECT_EQ(32u, FileCipher::forType(type).chunkKey(KEY, 0).size()) << "cipherType " << type;
     }
+}
+
+/**
+ * The derivation is HMAC keyed by the file key — not the bare digest it was before 3.0.0.
+ *
+ * `ChunkKeyAndHmacFollowTheDocumentedFormula` pins this for format 1 through the frame it produces;
+ * this says it directly, for the GCM formats too, and names the construction that was replaced so a
+ * revert to `H(fileKey || BE32(index))` fails here rather than merely changing what gets written.
+ */
+TEST(StoreFileCipher, ChunkKeyIsAKeyedPrfAndNotABareDigest) {
+    const std::string indexBE("\x00\x00\x00\x07", 4);
+    const std::string label("privmx/store/file-chunk");
+
+    // Formats 1 and 2 hash with SHA-256, so the expected value is the same for both.
+    const std::string expected = privmx::crypto::Crypto::hmacSha256(KEY, label + indexBE).substr(0, 32);
+    EXPECT_EQ(expected, cbc().chunkKey(KEY, 7));
+    EXPECT_EQ(expected, gcm().chunkKey(KEY, 7));
+
+    EXPECT_NE(privmx::crypto::Crypto::sha256(KEY + indexBE), cbc().chunkKey(KEY, 7));
+    // The label is load-bearing: without it this would be HMAC over the index alone.
+    EXPECT_NE(privmx::crypto::Crypto::hmacSha256(KEY, indexBE).substr(0, 32), cbc().chunkKey(KEY, 7));
 }
 
 /// The point of this format: the same layout, a different hash. If the chunk key came out the same,
