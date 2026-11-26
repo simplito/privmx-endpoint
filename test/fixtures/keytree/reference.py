@@ -112,6 +112,8 @@ RULES = [
     (dict(ALL_MANAGERS, changeRoles="nobody", changeRules="nobody", changeVisibility="members", editPrivateMeta="members"),
      "alice"),
     (dict(IMMUTABLE), "alice"),
+    # The defaults a client fills: every rule the managers' but trimHistory, nobody's (also the Bridge's vector).
+    (dict(ALL_MANAGERS, trimHistory="nobody"), "alice"),
 ]
 
 # Rules objects both sides refuse: a field missing, one unknown, a value outside the field's set, the old grammar.

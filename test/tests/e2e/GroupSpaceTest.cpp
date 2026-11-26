@@ -189,6 +189,27 @@ TEST_F(GroupSpaceTest, a_removal_from_a_team_makes_the_key_stale_and_the_next_wr
     EXPECT_ANY_THROW({ groupApi->encryptInSpace(spaceId, note("n3"), text("still here")); });
 }
 
+TEST_F(GroupSpaceTest, a_history_cut_refreshes_the_spaces_naming_the_group) {
+    const std::string sales = groupApi->createGroup(
+        contextId(), {user(1), user(2)}, {user(1)}, text("public"), text("private"),
+        GroupRulesUpdate{.trimHistory = "managers"}, std::nullopt, "context"
+    );
+    const std::string spaceId = groupApi->createSpace(contextId(), {team(sales, "manager")}, text(""), text(""));
+
+    int64_t epoch = 0;
+    ASSERT_NO_THROW({ epoch = groupApi->cutHistory(sales); });
+    // The Space's entry for the group moved to the new epoch with the cut, under a new Space key.
+    const SpaceState state = groupApi->getSpace(spaceId);
+    ASSERT_EQ(state.groups.size(), 1u);
+    EXPECT_EQ(state.groups.at(0).keyVersion, epoch);
+    EXPECT_FALSE(state.keyIsStale);
+    EXPECT_EQ(state.keyVersion, 2);
+    const core::Buffer after = groupApi->encryptInSpace(spaceId, note("n2"), text("after"));
+
+    switchTo(2);
+    EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n2"), after, by(userId(1))).data.stdString(), "after");
+}
+
 TEST_F(GroupSpaceTest, an_added_recipient_reads_the_past_and_a_removed_one_gets_no_new_key) {
     const core::Buffer seed = text("project-42");
     const std::string spaceId = groupApi->createSpace(

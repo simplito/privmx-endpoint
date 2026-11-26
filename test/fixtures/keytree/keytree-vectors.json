@@ -220,6 +220,21 @@
       },
       "creator": "alice",
       "expectedHex": "0378bec2d5cba0dc69acd4d78863415009f918570171d1337ff786d3bf03f713"
+    },
+    {
+      "policy": {
+        "addMembers": "managers",
+        "removeMembers": "managers",
+        "replaceMemberKeys": "managers",
+        "changeRoles": "managers",
+        "changeRules": "managers",
+        "changeVisibility": "managers",
+        "trimHistory": "nobody",
+        "editPublicMeta": "managers",
+        "editPrivateMeta": "managers"
+      },
+      "creator": "alice",
+      "expectedHex": "6dfe3f16482ac7cf7cfd4751a784bc12488315209222a81b3c7a60c59f37bbd8"
     }
   ],
   "invalidRules": [

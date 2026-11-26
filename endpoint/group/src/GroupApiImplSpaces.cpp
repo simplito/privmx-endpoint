@@ -952,10 +952,12 @@ SpaceState GroupApiImpl::getSpace(const std::string& spaceId) {
 
 core::PagingList<SpaceState> GroupApiImpl::listSpaces(
     const std::string& contextId,
-    const core::PagingQuery& pagingQuery
+    const core::PagingQuery& pagingQuery,
+    const std::optional<std::string>& groupId
 ) {
     group::server::SpaceListModel model;
     model.contextId = contextId;
+    model.groupId = groupId;
     core::ListQueryMapper::map(model, pagingQuery);
     std::map<std::string, std::uint64_t> seqsWhenSent;
     std::map<std::string, std::uint64_t> generationsWhenSent;

@@ -186,11 +186,7 @@ void CommitEngine::submit(
         if (isRetryableCommitRejection(e)) {
             deps.treeVerifier.refusedAsLostRace(groupId, statement.seq);
         }
-        // A history cut a Space still needs is refused for good: kept, it would be resent by a later commit.
-        if (e.getCode() == privmx::endpoint::server::GroupInUseException().getCode()) {
-            forgetUnresolved(groupId, commit.digest);
-        }
-        throw; // any other failure keeps the body: the bridge may have applied it, and a retry resends it
+        throw; // any failure keeps the body: the bridge may have applied it, and a retry resends it
     }
     complete(groupId, commit);
 }

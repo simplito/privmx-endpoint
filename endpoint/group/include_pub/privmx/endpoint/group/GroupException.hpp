@@ -112,7 +112,6 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupAlreadyExistsException, 
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupWrongCreatorException, "The Group or Space was created by someone other than the expected user", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupSubjectReboundException, "This device knows the subject under another Group", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractSpaceChangedEventException, "Cannot extract SpaceChangedEvent", 0x0024)
-DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupHistoryInUseException, "A Space still holds the Group at an epoch the cut would remove; rotate those Spaces first", 0x0025)
 // clang-format on
 } // namespace group
 } // namespace endpoint

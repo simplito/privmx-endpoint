@@ -267,7 +267,7 @@ TEST(TreeCommitsStatement, SignedBytesMatchTheReference) {
 
 TEST(TreeCommitsPolicy, RulesHashToTheSharedVectors) {
     const auto all = vectors()->getArray("policyHash");
-    ASSERT_EQ(all->size(), 6u);
+    ASSERT_EQ(all->size(), 7u);
     for (std::size_t i = 0; i < all->size(); ++i) {
         const auto vector = all->getObject(static_cast<unsigned>(i));
         EXPECT_EQ(
@@ -298,6 +298,7 @@ TEST(TreeCommitsPolicy, RulesHashToTheBridgesVectors) {
               "757d92df6e2bef81c90c3aaccddc69642b36a66a0ed15ba807b2ccff639fed9a"},
              {allMembers, "alice", "833ecdd293832d6ac5daa240242a15b72eb9e9cc8102c2d5de59e86641217586"},
              {fifth, "alice", "f6f11160baa6217326dbd3e1c8fb2c3a9bbc59253df0ebb60fa7e13eabc42db8"},
+             {{{"trimHistory", "nobody"}}, "alice", "6dfe3f16482ac7cf7cfd4751a784bc12488315209222a81b3c7a60c59f37bbd8"},
          }) {
         EXPECT_EQ(hex(TreeCommits::rules(policyOf(rules), creator).hash), expected) << creator;
     }

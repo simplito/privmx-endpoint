@@ -695,6 +695,22 @@ std::optional<bool> GroupOperations::remove(
         currentGrantKey.reset(); // not the epoch's key: wrapped into the unit rung it would cut history off anyway
     }
     const bool abandonHistory = !currentGrantKey.has_value();
+    // Abandoning history (the Bridge's check, not a signed one) needs trimHistory or changeRules beside the
+    // removal's own rules, and both edit rules (the planes start over empty): refused here before signing.
+    if (abandonHistory) {
+        assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", "a removal that abandons history");
+        assertRule(
+            verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", "a removal that abandons history"
+        );
+        try {
+            assertRule(verified, &keytree::GroupRules::trimHistory, "trimHistory", "a removal that abandons history");
+        } catch (const GroupUnauthorizedSignerException&) {
+            assertRule(
+                verified, &keytree::GroupRules::changeRules, "trimHistory or changeRules",
+                "a removal that abandons history"
+            );
+        }
+    }
     // Roster plane only: a removal must not wait on a metadata entry that may sit at an older epoch. With history
     // abandoned the entry cannot be opened; the served roster, bound to the signed latest statement by
     // `verifyTree`'s roster hash, stands in for it.
@@ -838,7 +854,10 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
     const auto cache = deps.sessions.of(groupId)->treeKeys();
     const VerifiedGroup& verified = planOn(read);
     if (cutHistory) {
+        // Both planes sit below the new floor, and carrying them up is a write of each.
         assertRule(verified, &keytree::GroupRules::trimHistory, "trimHistory", "cutting the group's history");
+        assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", "cutting the group's history");
+        assertRule(verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", "cutting the group's history");
     }
     const keytree::TreeGroupState state = climbForPlanning(verified, cache);
     const auto currentGrantKey = cache->getGrantKey(keytree::GroupKeyResolver::epochOf(currentEpoch));

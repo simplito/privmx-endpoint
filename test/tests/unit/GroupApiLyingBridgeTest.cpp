@@ -3482,19 +3482,49 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotSealACachedGrantKeyThatIsNot
     EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
 }
 
-TEST_F(GroupApiLyingBridge, ARemovalThatAbandonsHistoryNeedsOnlyTheRemovalRules) {
-    // bob's own leaf does not open, so his removal abandons history: a removal's consequence, not a cut, so
-    // trimHistory ("nobody" here) is not asked.
-    quiet = true;
-    std::map<std::string, std::string> rules;
-    for (const std::string& field : TreeCommits::ruleFields()) {
-        rules[field] = field == "trimHistory" ? "nobody" : "members";
+// bob's own leaf does not open, so his removal would abandon history: beside removeMembers, trimHistory or
+// changeRules. Refused before anything is sent without either; the Bridge enforces the same.
+class GroupApiLyingBridgeAbandon : public GroupApiLyingBridge {
+protected:
+    bool bobRemovesCarolUnder(const std::string& trimHistory, const std::string& changeRules) {
+        quiet = true;
+        std::map<std::string, std::string> rules;
+        for (const std::string& field : TreeCommits::ruleFields()) {
+            rules[field] = field == "trimHistory" ? trimHistory : field == "changeRules" ? changeRules : "members";
+        }
+        const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith(rules));
+        selfUpdateBy("alice");
+        garbleLeafEdgeOf(bridge, "bob", "alice");
+        try {
+            client("bob").removeGroupMembers(groupId, {"carol"});
+        } catch (const GroupUnauthorizedSignerException&) {
+            EXPECT_EQ(count("bob", "context.groupRemoveMembers"), 0u);
+            return false;
+        }
+        expectRemoved(bridge, "carol");
+        return true;
     }
-    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith(rules));
-    selfUpdateBy("alice");
-    garbleLeafEdgeOf(bridge, "bob", "alice");
-    EXPECT_NO_THROW(client("bob").removeGroupMembers(groupId, {"carol"}));
-    expectRemoved(bridge, "carol");
+};
+
+TEST_F(GroupApiLyingBridgeAbandon, RefusedWithNeitherRule) {
+    EXPECT_FALSE(bobRemovesCarolUnder("nobody", "nobody"));
+}
+
+TEST_F(GroupApiLyingBridgeAbandon, AllowedUnderTrimHistory) {
+    EXPECT_TRUE(bobRemovesCarolUnder("members", "nobody"));
+}
+
+TEST_F(GroupApiLyingBridgeAbandon, AllowedUnderChangeRules) {
+    EXPECT_TRUE(bobRemovesCarolUnder("nobody", "members"));
+}
+
+TEST_F(GroupApiLyingBridge, ACutNeedsTheEditRuleOfEachPlaneItCarries) {
+    // bob may trim history and write the public plane, not the private one, which the cut would carry up.
+    const std::string groupId = createGroup(
+        {"alice", "bob"}, policyWith({{"trimHistory", "members"}, {"editPublicMeta", "members"}})
+    );
+    EXPECT_THROW(client("bob").cutHistory(groupId), GroupUnauthorizedSignerException);
+    EXPECT_EQ(count("bob", "context.groupGenerateNewKey"), 0u);
 }
 
 TEST_F(GroupApiLyingBridge, ACutNeedsTrimHistory) {
@@ -3529,16 +3559,6 @@ TEST_F(GroupApiLyingBridge, ACutPublishesNoRungAndLeavesTheGroupReadable) {
     EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
     EXPECT_EQ(bridge.eraFloor, 2);
     EXPECT_GT(bridge.rungs.size(), rungsBefore);
-}
-
-TEST_F(GroupApiLyingBridge, ACutASpaceStillNeedsSurfacesAsInUse) {
-    quiet = true;
-    const std::string groupId = createGroup({"alice", "bob"}, policyWith({{"trimHistory", "managers"}}));
-    bridge.beforeRotation = [] { bridgeError<srv::GroupInUseException>(); };
-    EXPECT_THROW(client("alice").cutHistory(groupId), GroupHistoryInUseException);
-    bridge.beforeRotation = [] {};
-    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId)) << "the refused cut is not resent under a rotation";
-    EXPECT_EQ(bridge.eraFloor, 1);
 }
 
 TEST_F(GroupApiLyingBridge, AVisibilityChangeNeedsChangeVisibility) {

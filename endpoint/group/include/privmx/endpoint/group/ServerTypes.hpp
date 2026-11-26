@@ -461,7 +461,8 @@ JSON_STRUCT(SpaceIdModel, SPACE_ID_MODEL_FIELDS);
 #define SPACE_GET_RESULT_FIELDS(F) F(space, SpaceInfo)
 JSON_STRUCT(SpaceGetResult, SPACE_GET_RESULT_FIELDS);
 
-#define SPACE_LIST_MODEL_EXTRA_FIELDS(F)
+// `groupId`: only the Spaces naming that group.
+#define SPACE_LIST_MODEL_EXTRA_FIELDS(F) F(groupId, std::optional<std::string>)
 JSON_STRUCT_EXT(SpaceListModel, core::server::ContainerListModel, SPACE_LIST_MODEL_EXTRA_FIELDS);
 
 #define SPACE_LIST_RESULT_FIELDS(F)                                                                                    \

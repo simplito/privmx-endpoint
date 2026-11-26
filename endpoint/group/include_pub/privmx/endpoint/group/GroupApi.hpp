@@ -146,7 +146,8 @@ public:
      *
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
-     * every member (under the removal's own rules, no `trimHistory`). After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
+     * every member, which needs `trimHistory` or `changeRules`, `editPublicMeta` and `editPrivateMeta` beside the
+     * removal's own rules, and is refused by the Bridge while a Space names the Group. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
      * refused instead while the previous key still opens the leaf: call renewLeaf first.
      *
      * @param groupId ID of the Group
@@ -180,12 +181,15 @@ public:
      * anything the Bridge still stores; members keep only the keys already cached on their own devices, and a member
      * added later reads nothing from before the cut.
      *
-     * Allowed by the `trimHistory` rule ("nobody" by default), checked before anything is signed. Both metadata
-     * planes are carried up to the new epoch, as after a rotation. Charged to the rotation budget like
+     * Allowed by the `trimHistory` rule ("nobody" by default) together with `editPublicMeta` and
+     * `editPrivateMeta` (both metadata planes sit below the new floor and are carried up to the new epoch under
+     * the caller's name), all checked before anything is signed. Charged to the rotation budget like
      * rotateGroupKey; containers granted to the Group go stale and are re-keyed onto the new epoch.
      *
-     * A Space that still holds the Group at an epoch below the new floor makes the Bridge refuse the cut
-     * (GroupHistoryInUseException): rotate those Spaces onto the Group's current epoch first, then cut.
+     * Every Space naming the Group is re-keyed afterwards (rotateSpaceKey), which moves its entry for the Group to
+     * the new epoch; signing that refresh takes the cut epoch's key, so it runs in this session, and what does not
+     * complete is retried by this client's next call on the Group (in memory only). A Space left behind reads as
+     * stale (SpaceState::keyIsStale) until someone rotates it.
      *
      * @param groupId ID of the Group
      * @return the Group's key epoch after the cut

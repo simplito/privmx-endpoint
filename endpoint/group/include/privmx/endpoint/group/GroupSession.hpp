@@ -105,6 +105,10 @@ struct GroupSession {
     // Limit: in memory only. A crash before the retry leaves the planes refused until a member holding the plane's
     // rule writes it (documented on updateGroupRules); persist it next to the pins if that ever matters.
     std::optional<PendingCarry> pendingCarry;
+    // A history cut's follow-up still to do (the planes carried up, the Spaces naming the group refreshed past the
+    // floor), with the read before the cut. Limit: in memory only, as `pendingCarry`; after a restart the old epoch's
+    // key a Space refresh signs with is gone anyway, and the Space waits for whoever rotates it.
+    std::optional<PriorRole> pendingCut;
     // The deferred self-update, at most one. Dropped on disconnect.
     std::optional<PendingSelfUpdate> selfUpdate;
 

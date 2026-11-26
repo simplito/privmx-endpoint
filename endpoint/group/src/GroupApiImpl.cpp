@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <utility>
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -278,20 +279,68 @@ int64_t GroupApiImpl::cutHistory(const std::string& groupId) {
     _metadata.retryPendingCarry(groupId);
     bool committedHere = true;
     PriorRole prior;
-    try {
-        CommitEngine::commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior, true); });
-    } catch (const core::Exception& e) {
-        if (e.getCode() == privmx::endpoint::server::GroupInUseException().getCode()) {
-            throw GroupHistoryInUseException(e);
-        }
-        throw;
-    }
+    CommitEngine::commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior, true); });
     // As after a rotation. The cutter still holds the cut epoch's key, so the planes are carried with what they say.
     if (committedHere) {
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior);
+        const auto session = _sessions.of(groupId);
+        std::lock_guard<std::mutex> lock(session->mutex);
+        session->pendingCut = prior;
     }
+    const int64_t epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
     runDueWork(groupId);
-    return static_cast<int64_t>(pinnedKeyVersion(groupId));
+    return epoch;
+}
+
+void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
+    std::optional<PriorRole> prior;
+    {
+        const auto session = _sessions.find(groupId);
+        if (!session) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(session->mutex);
+        prior = std::exchange(session->pendingCut, std::nullopt); // taken: a Space write below runs due work too
+    }
+    if (!prior.has_value()) {
+        return;
+    }
+    bool done = _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior.value());
+    try {
+        const std::string contextId = readGroupForKeys(groupId)->contextId;
+        const auto epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
+        for (int64_t skip = 0;; skip += 100) {
+            const auto page = listSpaces(
+                contextId, core::PagingQuery{.skip = skip, .limit = 100, .sortOrder = "asc"}, groupId
+            );
+            for (const SpaceState& space : page.readItems) {
+                const bool behind = std::any_of(space.groups.begin(), space.groups.end(), [&](const auto& g) {
+                    return g.groupId == groupId && g.keyVersion < epoch;
+                });
+                if (!behind) {
+                    continue;
+                }
+                try {
+                    rotateSpaceKey(space.spaceId);
+                } catch (const std::exception& e) {
+                    done = false;
+                    LOG_WARN("[cutHistory] Space ", space.spaceId, " not refreshed past the cut: ", e.what())
+                }
+            }
+            if (page.readItems.size() < 100) {
+                break;
+            }
+        }
+    } catch (const std::exception& e) {
+        done = false;
+        LOG_WARN("[cutHistory] the Spaces of group ", groupId, " were not refreshed: ", e.what())
+    }
+    if (!done) {
+        const auto session = _sessions.of(groupId);
+        std::lock_guard<std::mutex> lock(session->mutex);
+        if (!session->pendingCut.has_value()) {
+            session->pendingCut = prior; // kept for the next call's due work
+        }
+    }
 }
 
 int64_t GroupApiImpl::replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds) {
@@ -394,6 +443,7 @@ void GroupApiImpl::runDueWork(const std::string& groupId) {
         return;
     }
     _deferred.run(groupId, [&] { selfUpdate(groupId); });
+    runCutFollowUp(groupId);
     savePinsIfDue();
 }
 
