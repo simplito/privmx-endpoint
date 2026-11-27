@@ -22,6 +22,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
@@ -877,9 +878,11 @@ TEST_F(ResolverOldEpoch, SECURITY_ARungSealedByAnotherMemberIsKeptButAttributedT
     EXPECT_EQ(result.key->toWIF(), epochKeys[6].toWIF()) << "crossed on the repair";
 }
 
-TEST_F(ResolverOldEpoch, SECURITY_AtMostEightRungsPerSpanAreKeptOpenerSealedFirst) {
-    // A lying bridge serving a span many times over can cost a reader at most eight attempts per span, and the
-    // opener's own rung is never pushed out by others.
+TEST_F(ResolverOldEpoch, SECURITY_AtMostEightRungsPerSpanPerAttributionAreKeptOpenerSealedFirst) {
+    // A lying bridge serving a span many times over can cost a reader at most eight attempts per span *per
+    // attribution bucket*, and the opener's own rung is never pushed out by others. Two buckets, so the bound here
+    // is 2 * MAX_SERVED_RUNGS_PER_SPAN — see `SECURITY_AClaimedAuthorCannotEvictUnattributedRungsFromItsSpan` for
+    // why one shared counter was not safe.
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
     const auto openers = openersOf(epochKeys, "remover", fixture.members[0].priv);
@@ -910,9 +913,49 @@ TEST_F(ResolverOldEpoch, SECURITY_AtMostEightRungsPerSpanAreKeptOpenerSealedFirs
             span.push_back(rung);
         }
     }
-    ASSERT_EQ(span.size(), GroupKeyResolver::MAX_SERVED_RUNGS_PER_SPAN);
+    ASSERT_EQ(span.size(), 2 * GroupKeyResolver::MAX_SERVED_RUNGS_PER_SPAN);
     EXPECT_EQ(span.front().data, opener.data) << "the opener's rung comes first";
     EXPECT_EQ(span.front().author, std::optional<std::string>("remover"));
+    const std::size_t attributed =
+        std::count_if(span.begin(), span.end(), [](const auto& rung) { return rung.author.has_value(); });
+    EXPECT_EQ(attributed, GroupKeyResolver::MAX_SERVED_RUNGS_PER_SPAN) << "each bucket capped on its own";
+}
+
+TEST_F(ResolverOldEpoch, SECURITY_AClaimedAuthorCannotEvictUnattributedRungsFromItsSpan) {
+    // The per-span cap counts per attribution, so rungs that merely *claim* the opener cannot push a genuine
+    // unattributed one — a repair sealed by another member — out of the span. That claim is cheap: on secp256k1 the
+    // wrap carries no signature and the sender field is plaintext, so `Ecies::sealedBy` attributes on the frame's
+    // word alone. With one shared counter a flood of claimants emptied the span of everything else and the ladder
+    // broke at a hop that was intact.
+    Fixture fixture = buildFixture(4);
+    const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
+    setOwnLeafPosition(fixture.group, 1);
+    const auto openers = openersOf(epochKeys, "remover", fixture.members[0].priv);
+    server::GroupGetKeyArchiveResult archive = fixture.archive;
+
+    // Every rung the opener is named on carries a wrong key, the repair carries the right one, and the repair is
+    // served last — exactly where a shared counter would have dropped it.
+    for (server::GroupArchiveRung& rung : archive.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            rung.data = LadderKeys::sealRung(PrivateKey::generateRandom(), RungSpan{8, 7},
+                                             epochKeys[7].getPublicKey(), fixture.members[0].priv);
+        }
+    }
+    for (int i = 0; i < 20; ++i) {
+        archive.rungs.push_back(server::GroupArchiveRung{8, 7,
+            LadderKeys::sealRung(PrivateKey::generateRandom(), RungSpan{8, 7}, epochKeys[7].getPublicKey(),
+                                 fixture.members[0].priv), std::nullopt});
+    }
+    archive.rungs.push_back(server::GroupArchiveRung{8, 7,
+        LadderKeys::sealRung(epochKeys[6], RungSpan{8, 7}, epochKeys[7].getPublicKey(), fixture.members[2].priv),
+        std::nullopt});
+
+    const server::GroupGetKeyArchiveResult authenticated = GroupKeyResolver::authenticated(archive, openers);
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 7, fixture.members[1].priv, authenticated);
+    ASSERT_TRUE(result.key.has_value()) << "the repair survived the flood of claimed authors";
+    EXPECT_EQ(result.key->toWIF(), epochKeys[6].toWIF()) << "crossed on the repair";
 }
 
 // caching — the seam GroupApiImpl::resolveGroupPrivKey actually calls on every read

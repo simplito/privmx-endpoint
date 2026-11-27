@@ -131,8 +131,9 @@ public:
         const server::GroupGetKeyArchiveResult& archive
     );
 
-    // Rungs kept per span: twice the bridge's cap (four), so an honest bridge never loses one and a lying one can
-    // force at most this many attempts per span.
+    // Rungs kept per span **and per attribution**: twice the bridge's cap (four), so an honest bridge never loses one
+    // and a lying one can force at most twice this many attempts per span. Counted in two buckets because a rung's
+    // author is only cryptographically established for a signing identity; see `authenticated`.
     static constexpr std::size_t MAX_SERVED_RUNGS_PER_SPAN = 8;
 
     // The archive as the group's statements vouch for it, `openers` being the statement that opened each epoch
@@ -140,7 +141,8 @@ public:
     // A rung sealed by the committer that opened the epoch it hangs from is named with that committer as author;
     // any other (a repair by another member, or anything the bridge made up) is kept unattributed — whether its key
     // is right is decided by the registry check in `descend`, never by its sealer. Per span, opener-sealed rungs come
-    // first, and at most MAX_SERVED_RUNGS_PER_SPAN are kept.
+    // first, and at most MAX_SERVED_RUNGS_PER_SPAN of each attribution are kept — an author the frame merely claims
+    // can reorder a span, but cannot push another rung out of it.
     static server::GroupGetKeyArchiveResult authenticated(
         server::GroupGetKeyArchiveResult archive,
         const std::map<std::uint64_t, CommitStatement>& openers

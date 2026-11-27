@@ -159,15 +159,27 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::auth
             rung.author.reset(); // the bridge's word is no attribution
         }
     }
-    // Opener-sealed rungs first, so the cap per span never drops one of them for one the bridge added.
+    // Opener-sealed rungs first, so the descent tries them before anything else in the same span.
     auto& rungs = archive.rungs;
     std::stable_partition(rungs.begin(), rungs.end(), [](const auto& rung) { return rung.author.has_value(); });
-    std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> perSpan;
+    // The cap is counted **per span and per attribution**, not per span alone, because `author` above is not
+    // uniformly trustworthy: for a composed identity `sealedBy` verified a signature, but for secp256k1 the frame
+    // carries none and the sender field is plaintext — anyone serving us the archive can put the opener's (public)
+    // key in it. With one shared counter that is enough to evict: mint MAX_SERVED_RUNGS_PER_SPAN junk rungs stamped
+    // with the opener's key, let the partition float them to the front, and every genuine rung for that span is
+    // erased before the descent ever sees it. The ladder then breaks at a hop that was intact.
+    //
+    // Two counters make the attribution a sorting hint and nothing more: a flood in either bucket can only exhaust
+    // its own. The cost is the bound per span doubling to 2 * MAX_SERVED_RUNGS_PER_SPAN attempts, which is what the
+    // cap is there to bound, and it stays a small constant.
+    std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> perSpanAttributed;
+    std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> perSpanUnattributed;
     rungs.erase(
         std::remove_if(
             rungs.begin(), rungs.end(),
             [&](const auto& rung) {
-                return ++perSpan[{rung.atKeyVersion, rung.targetKeyVersion}] > MAX_SERVED_RUNGS_PER_SPAN;
+                auto& seen = rung.author.has_value() ? perSpanAttributed : perSpanUnattributed;
+                return ++seen[{rung.atKeyVersion, rung.targetKeyVersion}] > MAX_SERVED_RUNGS_PER_SPAN;
             }
         ),
         rungs.end()
