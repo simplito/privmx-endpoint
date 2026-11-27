@@ -294,11 +294,6 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
                 statement.prevDigest != state->digest) {
                 throw fork("another statement where this device verified one");
             }
-            // The signer's standing before it: what an unverifiable refresh is held to.
-            const keytree::SpaceLogGroup* viaGroup = state.has_value() ? state->group(statement.via) : nullptr;
-            const bool bySpaceManager = statement.via.empty() ?
-                (state.has_value() && state->roleOfUser(statement.signer) == "manager") :
-                (viaGroup != nullptr && viaGroup->role == "manager");
             state = keytree::SpaceLog::apply(state, statement);
             signers.push_back(core::UserWithPubKey{.userId = statement.signer, .pubKey = statement.signerPubKey});
             for (const keytree::SpaceLogGroup& group : statement.refreshedGroups) {
@@ -308,9 +303,6 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
                         .groupId = group.groupId,
                         .groupKeyVersion = group.groupKeyVersion,
                         .groupPubKey = group.groupPubKey,
-                        // Through this very group: only then did its pinned key sign the refresh.
-                        .byGroup = statement.via == group.groupId,
-                        .bySpaceManager = bySpaceManager,
                     }
                 );
             }
@@ -352,12 +344,11 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
 }
 
 // SECURITY: a group's pinned key in a Space's log is what "signed via that group" is checked against from then on,
-// so a refresh of it is held to the group's own verified history, not taken from whoever signed it. Through the group
-// itself (anyone who ever held one of its keys, a removed member too) it must be a key that group had at that epoch,
-// as this client can verify it: one of its epoch keys for a member, else the key G's verified chain of statements
-// opened that epoch with (the Bridge serves the chain to whoever may read the group's public info), or its verified
-// current key. A manager signing as a user could replace the group anyway: refused only when that is shown wrong
-// (ahead of the group, or another key at that epoch). What cannot be verified is refused.
+// so a refresh of it is held to the group's own verified history, whoever signed it (any recipient may: the Bridge
+// lets any recipient rotate). Whatever this client can verify, it does: one of the group's epoch keys for a member,
+// its verified current key, or the key its verified chain of statements opened a past epoch with (the Bridge serves
+// the chain to whoever may read the group's public info). A key shown wrong is refused; one nothing here can verify
+// (a group hidden from this reader) is taken as signed.
 void GroupApiImpl::requireGroupKeyRefreshesHold(
     const std::string& contextId,
     const std::vector<GroupKeyRefresh>& refreshes
@@ -375,36 +366,37 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
     // key, and every refresh of it is then refused.
     const auto epochs = fetchGroupEpochs(contextId, groupIds);
     // Each group's grant key per past epoch, off its verified chain (`epochOpeners`: fetched once a group, only the
-    // statements since on a later replay). Empty when the chain cannot be read: such a refresh is then unverifiable.
+    // statements since on a later replay). A chain that fails to read throws: a failed read is never "nothing to
+    // verify", which would take the refresh as signed.
     std::map<std::string, std::map<std::uint64_t, std::string>> chainKeys;
     const auto chainKeyAt = [&](const std::string& groupId, std::uint64_t epoch) -> std::optional<std::string> {
         auto chain = chainKeys.find(groupId);
         if (chain == chainKeys.end()) {
-            chain = chainKeys.emplace(groupId, std::map<std::uint64_t, std::string>()).first;
-            try {
-                for (const auto& [at, opener] : _treeVerifier.epochOpeners(
-                         groupId, contextId, VerifiedGroup::treeEnvironment(_serverApi, _connection, groupId)
-                     )) {
-                    chain->second[at] = opener.groupPubKey;
-                }
-            } catch (const std::exception& e) {
-                LOG_WARN("[space log] group ", groupId, " shows no verifiable chain to this caller: ", e.what())
+            std::map<std::uint64_t, std::string> keys;
+            for (const auto& [at, opener] : _treeVerifier.epochOpeners(
+                     groupId, contextId, VerifiedGroup::treeEnvironment(_serverApi, _connection, groupId)
+                 )) {
+                keys[at] = opener.groupPubKey;
             }
+            chain = chainKeys.emplace(groupId, std::move(keys)).first;
         }
         const auto key = chain->second.find(epoch);
         return key == chain->second.end() ? std::nullopt : std::optional<std::string>(key->second);
     };
-    // Whether the Bridge says outright that this caller may not see the group (a members-only group it is not in).
-    // A network failure or any other answer is no such word: the refresh stays unverifiable, and is refused.
+    // Whether the group shows this caller nothing: the Bridge says outright that it may not see it (a members-only
+    // group it is not in) or that there is none. Any other failure is thrown, for the same reason as above.
     const auto hiddenFromCaller = [&](const std::string& groupId) {
         try {
             server::GroupGetPublicKeyModel model;
             model.groupId = groupId;
             _serverApi.groupGetPublicKey(model);
         } catch (const core::Exception& e) {
-            return e.getCode() == privmx::endpoint::server::GroupDoesNotExistException().getCode() ||
-                e.getCode() == privmx::endpoint::server::AccessDeniedException().getCode();
-        } catch (...) {}
+            if (e.getCode() == privmx::endpoint::server::GroupDoesNotExistException().getCode() ||
+                e.getCode() == privmx::endpoint::server::AccessDeniedException().getCode()) {
+                return true;
+            }
+            throw;
+        }
         return false;
     };
     for (const GroupKeyRefresh& refresh : refreshes) {
@@ -423,18 +415,26 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
         const std::optional<core::GroupEpochInfo> current = epoch == epochs.end() ?
             std::nullopt :
             std::optional<core::GroupEpochInfo>(epoch->second);
+        const bool member = memberEpoch.has_value() && memberEpoch.value() > 0;
+        // No verified epoch of a group the caller can see: its history did not verify (a fork, a pin it is behind),
+        // so the key cannot be checked although it should be. Only a group that shows the caller nothing at all is
+        // "cannot verify".
+        if (!member && !current.has_value() && !hiddenFromCaller(refresh.groupId)) {
+            throw GroupUnauthorizedSignerException(
+                "space statement " +
+                std::to_string(refresh.seq) +
+                ": group " +
+                refresh.groupId +
+                " is visible to this caller but its key could not be verified"
+            );
+        }
         // A past epoch, below the group's verified current one, with no key of the caller's own to compare.
         const bool past = !(memberEpoch.has_value() && memberEpoch.value() > 0) &&
             current.has_value() &&
             refresh.groupKeyVersion < static_cast<std::uint64_t>(current->keyVersion);
-        // No view of the group at all: no key of it, no verified epoch, and the Bridge says it is hidden from us.
-        const bool hidden = refresh.byGroup &&
-            !(memberEpoch.has_value() && memberEpoch.value() > 0) &&
-            !current.has_value() &&
-            hiddenFromCaller(refresh.groupId);
         if (const auto why = refusedRefresh(
                 refresh, memberEpoch, current,
-                past ? chainKeyAt(refresh.groupId, refresh.groupKeyVersion) : std::nullopt, hidden
+                past ? chainKeyAt(refresh.groupId, refresh.groupKeyVersion) : std::nullopt
             )) {
             throw GroupUnauthorizedSignerException(
                 "space statement " + std::to_string(refresh.seq) + ": group " + refresh.groupId + " " + why.value()
@@ -447,8 +447,7 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
     const GroupKeyRefresh& refresh,
     std::optional<std::int64_t> memberEpoch,
     const std::optional<core::GroupEpochInfo>& current,
-    const std::optional<std::string>& chainKey,
-    bool groupHidden
+    const std::optional<std::string>& chainKey
 ) {
     if (memberEpoch.has_value() && memberEpoch.value() > 0) {
         return memberEpoch.value() == static_cast<std::int64_t>(refresh.groupKeyVersion) ?
@@ -477,19 +476,9 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
             std::nullopt :
             std::optional<std::string>("had another key at that epoch");
     }
-    // A group hidden from this reader leaves nothing to hold the refresh to; the via signature SpaceLog::apply
-    // checked is then the proof. Only a holder of the group's pinned key makes it: a current member (an insider) or
-    // one just removed (freshness, out of scope). Readers who can see the group still verify the key above.
-    if (refresh.byGroup) {
-        return groupHidden ? std::nullopt :
-                             std::optional<std::string>("refreshed through a group to a key this client cannot verify");
-    }
-    // A manager of the Space could replace the group among the recipients anyway. Anyone else's refresh is only as
-    // good as the key it names, and that cannot be verified here: a user of the Space could otherwise put a key of
-    // their own in a manager group's place.
-    if (!refresh.bySpaceManager) {
-        return "refreshed by a recipient who is no manager to a key this client cannot verify";
-    }
+    // Nothing to hold it to (a group that shows this reader nothing, or an epoch its verified chain does not have): taken
+    // from whichever recipient signed it. Owner decision 2026-11-27: what that leaves needs a lying Bridge and a
+    // current member, and costs availability only.
     return std::nullopt;
 }
 
@@ -507,8 +496,8 @@ keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
     const bool needManager = statement.op != keytree::SpaceOp::Rotate;
     const auto& users = prior.has_value() ? prior->users : statement.addedUsers;
     const auto& groups = prior.has_value() ? prior->groups : statement.addedGroups;
-    // Each standing the caller has is tried until the statement is one that may follow, a manager's first: a reader
-    // who cannot verify a refreshed group's key takes it only from a manager of the Space (or from that group).
+    // Each standing the caller has is tried until the statement is one that may follow: a group's key, for one,
+    // is refreshed by a manager or through that very group, so the first standing found is not always the one.
     std::optional<GroupUnauthorizedSignerException> refused;
     const auto follows = [&](const keytree::SpaceStatement& candidate) {
         try {
@@ -519,35 +508,30 @@ keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
             return false;
         }
     };
-    for (const bool asManager : {true, false}) {
-        if (!asManager && needManager) {
-            break;
-        }
-        for (const keytree::SpaceLogUser& user : users) {
-            if (user.userId == statement.signer && user.pubKey == ownPubKey && (user.role == "manager") == asManager) {
-                statement.via.clear();
-                keytree::SpaceLog::sign(statement, _userPrivKey, std::nullopt);
-                if (follows(statement)) {
-                    return statement;
-                }
-            }
-        }
-        for (const keytree::SpaceLogGroup& group : groups) {
-            if ((group.role == "manager") != asManager) {
-                continue;
-            }
-            std::optional<privmx::crypto::PrivateKey> groupKey;
-            try {
-                core::Validator::validateId(group.groupId, "field:space.groups.groupId ");
-                groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
-            } catch (const core::Exception&) {
-                continue; // not a group of the caller's
-            }
-            statement.via = group.groupId;
-            keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
+    for (const keytree::SpaceLogUser& user : users) {
+        if (user.userId == statement.signer && user.pubKey == ownPubKey && (!needManager || user.role == "manager")) {
+            statement.via.clear();
+            keytree::SpaceLog::sign(statement, _userPrivKey, std::nullopt);
             if (follows(statement)) {
                 return statement;
             }
+        }
+    }
+    for (const keytree::SpaceLogGroup& group : groups) {
+        if (needManager && group.role != "manager") {
+            continue;
+        }
+        std::optional<privmx::crypto::PrivateKey> groupKey;
+        try {
+            core::Validator::validateId(group.groupId, "field:space.groups.groupId ");
+            groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
+        } catch (const core::Exception&) {
+            continue; // not a group of the caller's
+        }
+        statement.via = group.groupId;
+        keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
+        if (follows(statement)) {
+            return statement;
         }
     }
     if (refused.has_value()) {

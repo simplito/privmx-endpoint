@@ -5442,56 +5442,30 @@ TEST_F(GroupApiLyingBridge, WithoutAStoreASubjectIsKeptForTheSession) {
     EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2)); // a first contact again
 }
 
-TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVerifiedKeys) {
+TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshIsHeldToWhatTheReaderCanVerifyOfTheGroup) {
     using Access = GroupApiImplTestAccess;
     const std::string real = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
     const std::string forged = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
-    const core::GroupEpochInfo current{.keyVersion = 4, .groupPubKey = real};
-    const auto viaG = [](std::uint64_t version, const std::string& key) {
-        return Access::GroupKeyRefresh{.seq = 7, .groupId = "g", .groupKeyVersion = version, .groupPubKey = key, .byGroup = true};
-    };
-    // A removed member, still holding the key the Space pinned for G, signs "via G" a key of their own for G.
-    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current).has_value()) << "another key at G's epoch";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current).has_value()) << "ahead of G";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current).has_value()) << "cannot be verified";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt).has_value()) << "G shows nothing";
-    // A member of G knows every epoch key of G.
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, current).has_value());
-    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::int64_t{3}, current).has_value());
-    // The real current key holds, through G or from a manager.
-    EXPECT_FALSE(Access::refusedRefresh(viaG(4, real), std::nullopt, current).has_value());
-    auto byManager = viaG(3, forged);
-    byManager.byGroup = false;
-    byManager.bySpaceManager = true;
-    EXPECT_FALSE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "a manager could replace G";
-    // Anyone else (a user of the Space, or through another group) is held to what can be verified of G.
-    auto byUser = byManager;
-    byUser.bySpaceManager = false;
-    EXPECT_TRUE(Access::refusedRefresh(byUser, std::nullopt, current).has_value()) << "cannot be verified";
-    EXPECT_TRUE(Access::refusedRefresh(byUser, std::nullopt, std::nullopt, std::nullopt, true).has_value())
-        << "not even for a reader G is hidden from";
-    byUser.groupKeyVersion = 4;
-    byUser.groupPubKey = real;
-    EXPECT_FALSE(Access::refusedRefresh(byUser, std::nullopt, current).has_value()) << "G's real current key";
-    byUser.groupPubKey = forged;
-    EXPECT_TRUE(Access::refusedRefresh(byUser, std::nullopt, current).has_value());
-    byManager.groupKeyVersion = 4;
-    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "shown wrong even for a manager";
-    // A past epoch of G, replayed after G moved on, by a reader holding no key of that epoch: held to the key G's
-    // verified chain opened that epoch with, never taken for being below the current epoch.
     const std::string past = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
-    EXPECT_FALSE(Access::refusedRefresh(viaG(3, past), std::nullopt, current, past).has_value()) << "G's own epoch 3";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past).has_value()) << "not G's epoch 3";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, past), std::nullopt, std::nullopt, past).has_value()) << "G unverified";
-    byManager.groupKeyVersion = 3;
-    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current, past).has_value()) << "the chain shows it wrong";
-    // A reader with no view of G at all (not a member, G members-only): the via-G signature is the proof it gets.
-    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt, std::nullopt, true).has_value());
-    // Still refused when anything it does know shows it wrong.
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, std::nullopt, std::nullopt, true).has_value());
-    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current, std::nullopt, true).has_value());
-    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current, std::nullopt, true).has_value());
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past, true).has_value());
+    const core::GroupEpochInfo current{.keyVersion = 4, .groupPubKey = real};
+    // Whoever signed it - through G, a manager, or a user of the Space through another group: the signer is not
+    // what the reader goes by.
+    const auto refresh = [](std::uint64_t version, const std::string& key) {
+        return Access::GroupKeyRefresh{.seq = 7, .groupId = "g", .groupKeyVersion = version, .groupPubKey = key};
+    };
+    // What the reader can verify, it does: G's verified current epoch...
+    EXPECT_FALSE(Access::refusedRefresh(refresh(4, real), std::nullopt, current).has_value()) << "G's current key";
+    EXPECT_TRUE(Access::refusedRefresh(refresh(4, forged), std::nullopt, current).has_value()) << "another key at G's epoch";
+    EXPECT_TRUE(Access::refusedRefresh(refresh(5, forged), std::nullopt, current).has_value()) << "ahead of G";
+    // ... a member's own epoch keys of G...
+    EXPECT_TRUE(Access::refusedRefresh(refresh(3, forged), std::int64_t{2}, current).has_value()) << "another epoch's key";
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, forged), std::int64_t{3}, current).has_value());
+    // ... and, for an epoch G has left, the key G's verified chain opened it with.
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, past), std::nullopt, current, past).has_value()) << "G's own epoch 3";
+    EXPECT_TRUE(Access::refusedRefresh(refresh(3, forged), std::nullopt, current, past).has_value()) << "not G's epoch 3";
+    // What it cannot verify (G hidden from it: no key, no epoch, no chain) it takes as signed, from any recipient.
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, forged), std::nullopt, std::nullopt).has_value());
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, past), std::nullopt, current).has_value()) << "a past epoch, no chain";
 }
 
 
@@ -5665,6 +5639,31 @@ TEST_F(GroupApiLyingBridgeSpaces, ANewSessionVerifiesOnlyTheStatementsSinceTheSt
     bridge.spaces.at(spaceId).info.keyVersion = 4;
     bridge.spaces.at(spaceId).info.seq = 3;
     EXPECT_THROW(sibling("bob").getSpace(spaceId), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_ARefreshWhoseGroupChainFailsToReadIsNotTakenAsUnverifiable) {
+    // Sales (alice, carol), visible to the Context, is a recipient. Its key moves to epoch 2, the Space follows
+    // (a refresh), and sales moves on to epoch 3: bob, outside sales, holds the refresh to epoch 2 against the
+    // key sales' verified chain opened that epoch with.
+    quiet = true;
+    const std::string sales = createGroup({"alice", "carol"});
+    bridge.visibleToContext = true;
+    const std::string spaceId = client("alice").createSpace(
+        CONTEXT,
+        {person("alice", "manager"), person("bob", "user"),
+         SpaceRecipient{.groupId = sales, .user = std::nullopt, .role = "user"}},
+        core::Buffer::from("pub"), core::Buffer::from("priv"), std::nullopt
+    );
+    client("alice").rotateGroupKey(sales);
+    client("alice").rotateSpaceKey(spaceId);
+    ASSERT_EQ(bridge.spaces.at(spaceId).statements.back().refreshedGroups.size(), 1u);
+    client("alice").rotateGroupKey(sales);
+    EXPECT_EQ(sibling("bob").getSpace(spaceId).keyVersion, 2) << "the chain read, the refresh verified";
+    // The same read with the chain failing: an error, never "nothing to verify" taken as signed.
+    bridge.onCommits = [](std::uint64_t, std::uint64_t, server::GroupGetTreeCommitsResult&) {
+        throw std::runtime_error("the Bridge is down");
+    };
+    EXPECT_ANY_THROW(sibling("bob").getSpace(spaceId));
 }
 
 TEST_F(GroupApiLyingBridgeSpaces, AStatementCarriesItsChangesNotTheRoster) {

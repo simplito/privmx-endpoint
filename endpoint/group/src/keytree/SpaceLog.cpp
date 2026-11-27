@@ -384,8 +384,7 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
     // next key is wrapped to. So they move only forward, to another key. Any recipient may move them, as the Bridge
     // lets any recipient rotate (a stale key must not wait for a manager): whether the new key is the group's is
     // not something the statement can show, so the reader checks it against the group's verified keys
-    // (GroupApiImpl::requireGroupKeyRefreshesHold), and refuses one it cannot verify unless a manager of the Space
-    // (who could replace the group anyway) or the group itself signed it.
+    // (GroupApiImpl::requireGroupKeyRefreshesHold), as far as it can verify them.
     for (const SpaceLogGroup& refresh : statement.refreshedGroups) {
         const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& g) {
             return g.groupId == refresh.groupId;

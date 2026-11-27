@@ -794,8 +794,8 @@ public:
     /**
      * One symmetric encryption and one signature. When the key is stale, it is replaced first, by any recipient:
      * nothing is written under a key a removed member holds. The replacement moves each recipient Group whose epoch
-     * moved to its current key; a reader checks that key against the Group's verified keys, and one it cannot
-     * verify (a Group hidden from that reader) it takes only from a manager of the Space or from that Group itself.
+     * moved to its current key; a reader checks that key against what it can verify of the Group (refusing one
+     * shown wrong), and takes one it cannot verify (a Group hidden from that reader) as the recipient signed it.
      * A caller who cannot see a recipient Group gets SpaceRecipientUnavailableException, also under a fresh key
      * (see the note above).
      */
