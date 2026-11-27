@@ -95,6 +95,12 @@ struct KeyAlgorithmSpec {
 
 constexpr std::uint8_t UNTAGGED = 0x00;
 
+/// The network byte of a Bitcoin-style WIF. A WIF is a secp256k1 private key by construction, which
+/// is why reading one needs no tag and never consults the build's default. Declared up here because
+/// the tag space has to be checked against it — see `noAlgorithmClaimsTheWifByte`.
+constexpr std::uint8_t WIF_NETWORK_BYTE = 0x80;
+constexpr std::size_t IDENTITY_SECRET_LENGTH = 32;
+
 /**
  * The identity-key algorithms the endpoint works with.
  *
@@ -105,8 +111,9 @@ constexpr std::uint8_t UNTAGGED = 0x00;
  * The second one only shows up when importing an uncompressed public key.
  *
  * The tags are shared wire format with the bridge (`src/utils/crypto/VerifyKey.ts`) and must not drift.
- * They sit at 0x80 and above, where a SEC1 point prefix cannot be (0x02/0x03 compressed, 0x04/0x06/0x07
+ * They sit at 0x81 and above, where a SEC1 point prefix cannot be (0x02/0x03 compressed, 0x04/0x06/0x07
  * uncompressed), so a key in the old untagged encoding fails as an unknown tag instead of being misread.
+ * 0x80 is excluded deliberately — it is the WIF network byte; see `noAlgorithmClaimsTheWifByte`.
  */
 constexpr std::array<KeyAlgorithmSpec, 4> KEY_ALGORITHMS{{
     {cs::AsymAlg::PrivmxSecp256k1, cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact, 0x81, 33, cs::AsymAlg::NoAlg,
@@ -124,12 +131,39 @@ constexpr std::array<KeyAlgorithmSpec, 4> KEY_ALGORITHMS{{
     // the post-quantum half first; an ML-DSA signing half is a separate row, and is blocked anyway
     // until pmx-crypto can derive a hybrid signature key from a seed.
     //
-    // Named by `X25519MLKEM768` because that is what the key agreement is. It is *our* composition
-    // of two primitives, never pmx-crypto's key of that name — that one's `deriveSharedSecret`
-    // quietly drops the ML-KEM half and its `encapsulate` throws, so the halves are driven here.
+    // Named by `X25519MLKEM768` because that is what the key agreement is, and because that is the
+    // pmx-crypto key the wrap is addressed to: `Ecies::sealTarget` concatenates the two halves back
+    // into one key of that algorithm, whose `seal` encapsulates to both (`PublicKey::encapsulate`
+    // runs the classical and the ML-KEM half and combines the secrets).
+    //
+    // The halves are nevertheless *stored* apart, and derived apart — see `identityFromSecret`.
+    // That is not redundancy: an identity has to expose its signing half on its own (X25519 cannot
+    // sign), the tagged encoding carries three fixed-length pieces, and the agreement half has to
+    // stay usable alone when the peer is a plain 0x82 identity with no ML-KEM half to meet.
     {cs::AsymAlg::X25519MLKEM768, cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x83, 32, cs::AsymAlg::X25519, 32,
      cs::AsymAlg::MLKEM768, 1184, false},
 }};
+
+/**
+ * No algorithm may claim the WIF network byte.
+ *
+ * `decodePrivateKey` reads a leading 0x80 over a 32-byte payload as a WIF and returns a secp256k1
+ * scalar without ever consulting the tag table. A row tagged 0x80 would therefore have every one of
+ * its private keys silently decoded as a secp256k1 key — a wrong identity, not an error. The tag
+ * space starts at 0x81 for this reason, and this keeps it that way.
+ */
+constexpr bool noAlgorithmClaimsTheWifByte() {
+    for (const auto& spec : KEY_ALGORITHMS) {
+        if (spec.keyTag == WIF_NETWORK_BYTE) {
+            return false;
+        }
+    }
+    return true;
+}
+static_assert(
+    noAlgorithmClaimsTheWifByte(),
+    "a key algorithm claims tag 0x80, which decodePrivateKey reads as a WIF network byte"
+);
 
 /// Two hex digits, because a tag is only ever written in hex. `std::to_string` prints decimal, which
 /// under an `0x` prefix turns tag 0x82 into "0x130" in the one message someone reads to find out what
@@ -323,15 +357,6 @@ std::string encodeTaggedPublicKey(
         std::string(1, static_cast<char>(spec->keyTag)) + rawKey + rawAgreementKey + rawKemKey, FormatHash::sha256
     );
 }
-
-namespace {
-
-/// The network byte of a Bitcoin-style WIF. A WIF is a secp256k1 private key by construction, which
-/// is why reading one needs no tag and never consults the build's default.
-constexpr std::uint8_t WIF_NETWORK_BYTE = 0x80;
-constexpr std::size_t IDENTITY_SECRET_LENGTH = 32;
-
-} // namespace
 
 std::string encodePrivateKey(const std::string& secret, cs::AsymAlg algorithm) {
     const KeyAlgorithmSpec* spec = findSpec(algorithm);

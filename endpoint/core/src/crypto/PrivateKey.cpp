@@ -57,6 +57,30 @@ PrivateKey identityFromSecret(const std::string& secret, cs::AsymAlg algorithm) 
     // scheme it has to serve, and Ed25519 — which cannot agree keys — is rejected as the derivation
     // half. The post-quantum half is a third algorithm with no place in that pairing, so it gets an
     // ext key of its own, whose signing half is unused and only names something that can sign.
+    //
+    // What that second ext key actually yields is worth spelling out, because the seed split in
+    // `ExtKey` does not depend on the algorithms it was built with. Writing `S` for the secret and
+    // `MS` for pmx-crypto's master secret, every ext key here derives the same pair
+    //
+    //     L || R = HMAC-SHA512(MS, HMAC-SHA512(MS, S)[0:32])
+    //
+    // and hands `L` to the signing half and `R` to the derivation half — then, for ML-KEM-768 only,
+    // seeds it with `HMAC-SHA512(MS, R)` instead. So this identity is Ed25519 from `L`, X25519 from
+    // `R`, and ML-KEM-768 from `HMAC(MS, R)`.
+    //
+    // Two consequences follow, both intended:
+    //
+    //  - the Ed25519 and X25519 halves of an `ed25519x25519mlkem768` identity are bit-identical to
+    //    those of the `ed25519` identity built from the same secret. Taking a secret from 0x82 to
+    //    0x83 therefore adds the encapsulation half without changing who the holder is to anyone
+    //    they already agreed keys with. It also means the upgrade does nothing for wraps already
+    //    recorded: those were addressed to `R` and stay addressed to `R`. The post-quantum half
+    //    protects wraps made *after* it, which is what harvest-now-decrypt-later calls for.
+    //
+    //  - the ML-KEM seed is a one-way function of `R`, not an independent value. Recovering the
+    //    X25519 private key recovers the ML-KEM one; the reverse does not hold. That costs nothing
+    //    against the attacker the hybrid is for — one who breaks X25519 *as a primitive* learns
+    //    nothing about `R` itself — and both halves are in one holder's hands regardless.
     const auto extKey = cryptoProvider()
                             .extKeyFromSeed(
                                 keyBytes(secret), signingAlgorithmFor(algorithm), agreementAlgorithmFor(algorithm)
