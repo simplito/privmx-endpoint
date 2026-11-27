@@ -792,11 +792,12 @@ public:
     void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
 
     /**
-     * One symmetric encryption and one signature. When the key is stale, it is replaced first. A caller who may
-     * not replace it (a "user" of the Space outside the Group whose key moved) gets EnvelopeStaleEpochException:
-     * nothing is written under a key a removed member holds. A manager, or a member of that Group, calls
-     * rotateSpaceKey. A caller who cannot see a recipient Group gets SpaceRecipientUnavailableException, also under
-     * a fresh key (see the note above).
+     * One symmetric encryption and one signature. When the key is stale, it is replaced first, by any recipient:
+     * nothing is written under a key a removed member holds. The replacement moves each recipient Group whose epoch
+     * moved to its current key; a reader checks that key against the Group's verified keys, and one it cannot
+     * verify (a Group hidden from that reader) it takes only from a manager of the Space or from that Group itself.
+     * A caller who cannot see a recipient Group gets SpaceRecipientUnavailableException, also under a fresh key
+     * (see the note above).
      */
     core::Buffer encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data);
     /** `options.currentEpochOnly` means the Space's current key version. */

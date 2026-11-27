@@ -5462,7 +5462,19 @@ TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVeri
     EXPECT_FALSE(Access::refusedRefresh(viaG(4, real), std::nullopt, current).has_value());
     auto byManager = viaG(3, forged);
     byManager.byGroup = false;
+    byManager.bySpaceManager = true;
     EXPECT_FALSE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "a manager could replace G";
+    // Anyone else (a user of the Space, or through another group) is held to what can be verified of G.
+    auto byUser = byManager;
+    byUser.bySpaceManager = false;
+    EXPECT_TRUE(Access::refusedRefresh(byUser, std::nullopt, current).has_value()) << "cannot be verified";
+    EXPECT_TRUE(Access::refusedRefresh(byUser, std::nullopt, std::nullopt, std::nullopt, true).has_value())
+        << "not even for a reader G is hidden from";
+    byUser.groupKeyVersion = 4;
+    byUser.groupPubKey = real;
+    EXPECT_FALSE(Access::refusedRefresh(byUser, std::nullopt, current).has_value()) << "G's real current key";
+    byUser.groupPubKey = forged;
+    EXPECT_TRUE(Access::refusedRefresh(byUser, std::nullopt, current).has_value());
     byManager.groupKeyVersion = 4;
     EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "shown wrong even for a manager";
     // A past epoch of G, replayed after G moved on, by a reader holding no key of that epoch: held to the key G's

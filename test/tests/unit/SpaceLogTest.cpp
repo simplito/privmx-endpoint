@@ -180,22 +180,21 @@ TEST_F(SpaceLogRules, SECURITY_ARotationChangesTheKeyAndNothingElse) {
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.users[0] = user("alice", eve, "manager");
     EXPECT_THROW(SpaceLog::apply(state, by(s, "bob", bob)), GroupDataIntegrityException);
-    // A group's epoch and key may move with it: that is what a refresh after a removal in the group is. Bob, a
-    // user of the Space, is not the one to do it: with his own key in the sales group's place he would be a manager.
+    // A group's epoch and key may move with it: that is what a refresh after a removal in the group is. Any
+    // recipient may write one - bob himself, dave through support - as any recipient may rotate (a stale key must not
+    // wait for a manager). Whether the key is the group's is the reader's to check against the group's verified keys
+    // (GroupApiImpl::requireGroupKeyRefreshesHold), not something the statement shows.
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.groups[0] = group("sales", sales2, 2, "manager");
-    EXPECT_THROW(SpaceLog::apply(state, by(s, "bob", bob)), GroupUnauthorizedSignerException);
-    EXPECT_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)), GroupUnauthorizedSignerException);
-    // A manager is, and so is the group itself - which shows its standing with the key it had.
+    EXPECT_NO_THROW(SpaceLog::apply(state, by(s, "bob", bob)));
+    EXPECT_NO_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)));
     EXPECT_NO_THROW(SpaceLog::apply(state, by(s, "alice", alice)));
     const SpaceLogState refreshed = SpaceLog::apply(state, through(s, "carol", carol, "sales", sales1));
     EXPECT_EQ(refreshed.group("sales")->groupKeyVersion, 2u);
-    // A group that is a user of the Space refreshes its own key and nobody else's.
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.groups[1] = group("support", eve, 5, "user");
-    EXPECT_NO_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)));
     s.groups[0] = group("sales", sales2, 2, "manager");
-    EXPECT_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)), GroupUnauthorizedSignerException);
+    EXPECT_NO_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)));
     // Only forward, and only to another key.
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.groups[0] = group("sales", sales2, 1, "manager");
@@ -210,6 +209,21 @@ TEST_F(SpaceLogRules, SECURITY_ARotationChangesTheKeyAndNothingElse) {
     EXPECT_NO_THROW(
         SpaceLog::apply(refreshed, through(statement(SpaceOp::Rotate, refreshed, 3, key1), "carol", carol, "sales", sales2))
     );
+}
+
+TEST_F(SpaceLogRules, ANonManagerThroughOneGroupRotatesAndRefreshesAnother) {
+    // dave, through support (a user of the Space), rotates while sales' key is stale and moves sales to its epoch 2.
+    // The log takes it; a reader then holds sales2 to sales' verified keys (refusedRefresh, GroupApiLyingBridgeTest).
+    const SpaceLogState state = created();
+    Draft s = statement(SpaceOp::Rotate, state, 2, key2);
+    s.groups[0] = group("sales", sales2, 2, "manager");
+    const SpaceStatement rotation = through(s, "dave", eve, "support", support);
+    ASSERT_EQ(rotation.refreshedGroups.size(), 1u);
+    const SpaceLogState rotated = SpaceLog::apply(state, rotation);
+    EXPECT_EQ(rotated.group("sales")->groupKeyVersion, 2u);
+    EXPECT_EQ(rotated.group("sales")->groupPubKey, sales2.getPublicKey().toBase58DER());
+    EXPECT_EQ(rotated.group("sales")->role, "manager");
+    EXPECT_EQ(rotated.keyVersion, 2u);
 }
 
 TEST_F(SpaceLogRules, SECURITY_DeltasThatDoNotApplyCleanlyAreRefused) {

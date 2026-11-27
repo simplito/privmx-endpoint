@@ -381,9 +381,11 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
         users.erase(found);
     }
     // A group's pinned epoch and key are what "through that group" is checked against from here on, and what the
-    // next key is wrapped to. So they move only forward, and only by a manager - who could replace the group among
-    // the recipients anyway - or by the group itself. Any other recipient could otherwise put a key of their own in
-    // a manager group's place.
+    // next key is wrapped to. So they move only forward, to another key. Any recipient may move them, as the Bridge
+    // lets any recipient rotate (a stale key must not wait for a manager): whether the new key is the group's is
+    // not something the statement can show, so the reader checks it against the group's verified keys
+    // (GroupApiImpl::requireGroupKeyRefreshesHold), and refuses one it cannot verify unless a manager of the Space
+    // (who could replace the group anyway) or the group itself signed it.
     for (const SpaceLogGroup& refresh : statement.refreshedGroups) {
         const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& g) {
             return g.groupId == refresh.groupId;
@@ -393,11 +395,6 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
         }
         if (refresh.groupKeyVersion <= found->groupKeyVersion || refresh.groupPubKey == found->groupPubKey) {
             throw broken("a group's key is replaced by a later epoch's only");
-        }
-        if (role != "manager" && statement.via != refresh.groupId) {
-            throw GroupUnauthorizedSignerException(
-                "space statement: the key of group " + refresh.groupId + " is refreshed by a manager or by that group"
-            );
         }
         found->groupKeyVersion = refresh.groupKeyVersion;
         found->groupPubKey = refresh.groupPubKey;

@@ -294,6 +294,11 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
                 statement.prevDigest != state->digest) {
                 throw fork("another statement where this device verified one");
             }
+            // The signer's standing before it: what an unverifiable refresh is held to.
+            const keytree::SpaceLogGroup* viaGroup = state.has_value() ? state->group(statement.via) : nullptr;
+            const bool bySpaceManager = statement.via.empty() ?
+                (state.has_value() && state->roleOfUser(statement.signer) == "manager") :
+                (viaGroup != nullptr && viaGroup->role == "manager");
             state = keytree::SpaceLog::apply(state, statement);
             signers.push_back(core::UserWithPubKey{.userId = statement.signer, .pubKey = statement.signerPubKey});
             for (const keytree::SpaceLogGroup& group : statement.refreshedGroups) {
@@ -305,6 +310,7 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
                         .groupPubKey = group.groupPubKey,
                         // Through this very group: only then did its pinned key sign the refresh.
                         .byGroup = statement.via == group.groupId,
+                        .bySpaceManager = bySpaceManager,
                     }
                 );
             }
@@ -474,8 +480,15 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
     // A group hidden from this reader leaves nothing to hold the refresh to; the via signature SpaceLog::apply
     // checked is then the proof. Only a holder of the group's pinned key makes it: a current member (an insider) or
     // one just removed (freshness, out of scope). Readers who can see the group still verify the key above.
-    if (refresh.byGroup && !groupHidden) {
-        return "refreshed through a group to a key this client cannot verify";
+    if (refresh.byGroup) {
+        return groupHidden ? std::nullopt :
+                             std::optional<std::string>("refreshed through a group to a key this client cannot verify");
+    }
+    // A manager of the Space could replace the group among the recipients anyway. Anyone else's refresh is only as
+    // good as the key it names, and that cannot be verified here: a user of the Space could otherwise put a key of
+    // their own in a manager group's place.
+    if (!refresh.bySpaceManager) {
+        return "refreshed by a recipient who is no manager to a key this client cannot verify";
     }
     return std::nullopt;
 }
@@ -494,8 +507,8 @@ keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
     const bool needManager = statement.op != keytree::SpaceOp::Rotate;
     const auto& users = prior.has_value() ? prior->users : statement.addedUsers;
     const auto& groups = prior.has_value() ? prior->groups : statement.addedGroups;
-    // Each standing the caller has is tried until the statement is one that may follow: a group's key, for one,
-    // is refreshed by a manager or through that very group, so the first standing found is not always the one.
+    // Each standing the caller has is tried until the statement is one that may follow, a manager's first: a reader
+    // who cannot verify a refreshed group's key takes it only from a manager of the Space (or from that group).
     std::optional<GroupUnauthorizedSignerException> refused;
     const auto follows = [&](const keytree::SpaceStatement& candidate) {
         try {
@@ -506,30 +519,35 @@ keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
             return false;
         }
     };
-    for (const keytree::SpaceLogUser& user : users) {
-        if (user.userId == statement.signer && user.pubKey == ownPubKey && (!needManager || user.role == "manager")) {
-            statement.via.clear();
-            keytree::SpaceLog::sign(statement, _userPrivKey, std::nullopt);
+    for (const bool asManager : {true, false}) {
+        if (!asManager && needManager) {
+            break;
+        }
+        for (const keytree::SpaceLogUser& user : users) {
+            if (user.userId == statement.signer && user.pubKey == ownPubKey && (user.role == "manager") == asManager) {
+                statement.via.clear();
+                keytree::SpaceLog::sign(statement, _userPrivKey, std::nullopt);
+                if (follows(statement)) {
+                    return statement;
+                }
+            }
+        }
+        for (const keytree::SpaceLogGroup& group : groups) {
+            if ((group.role == "manager") != asManager) {
+                continue;
+            }
+            std::optional<privmx::crypto::PrivateKey> groupKey;
+            try {
+                core::Validator::validateId(group.groupId, "field:space.groups.groupId ");
+                groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
+            } catch (const core::Exception&) {
+                continue; // not a group of the caller's
+            }
+            statement.via = group.groupId;
+            keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
             if (follows(statement)) {
                 return statement;
             }
-        }
-    }
-    for (const keytree::SpaceLogGroup& group : groups) {
-        if (needManager && group.role != "manager") {
-            continue;
-        }
-        std::optional<privmx::crypto::PrivateKey> groupKey;
-        try {
-            core::Validator::validateId(group.groupId, "field:space.groups.groupId ");
-            groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
-        } catch (const core::Exception&) {
-            continue; // not a group of the caller's
-        }
-        statement.via = group.groupId;
-        keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
-        if (follows(statement)) {
-            return statement;
         }
     }
     if (refused.has_value()) {
@@ -1343,7 +1361,7 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
         if (!forStaleWrite) {
             throw;
         }
-        // Not this caller's to replace: a group's key is refreshed by a manager of the Space or by that group.
+        // Not this caller's to sign (no standing in the verified state).
         // Nothing is written under a key a removed member holds; whoever may, replaces it first.
         throw EnvelopeStaleEpochException("the Space's key is stale and the caller may not replace it", e);
     }

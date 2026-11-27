@@ -510,6 +510,7 @@ private:
         std::uint64_t groupKeyVersion = 0;
         std::string groupPubKey{};
         bool byGroup = false; // signed through this group itself (its pinned key), not by a user or another group
+        bool bySpaceManager = false; // signed by a manager of the Space (themselves or through a manager group)
     };
     void requireGroupKeyRefreshesHold(const std::string& contextId, const std::vector<GroupKeyRefresh>& refreshes);
     // Why a refresh is refused, given the epoch the caller's own key tree gives its key (members only), the group's
