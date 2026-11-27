@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <Poco/ByteOrder.h>
-#include <privmx/crypto/Crypto.hpp>
 
 #include <privmx/utils/Utils.hpp>
 
