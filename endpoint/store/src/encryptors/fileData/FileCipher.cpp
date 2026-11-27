@@ -50,8 +50,8 @@ struct CipherSpec {
      * Bytes the frame adds to the plaintext **beyond** padding.
      *
      * Stated explicitly rather than derived from `ivLength + hashLength`, because those two add up
-     * to the overhead only by coincidence: in format 1 the hash is prepended to the frame, in
-     * format 2 the tag is part of the cipher's output. A format whose hash length differed from
+     * to the overhead only by coincidence: in AES_CBC_HMAC_SHA256 the hash is prepended to the
+     * frame, in AES_GCM the tag is part of the cipher's output. A format whose hash length differed from
      * the frame's authenticator would break that formula silently.
      */
     std::size_t fixedOverhead;
@@ -63,19 +63,6 @@ struct CipherSpec {
     core::SuiteId hashSuite;
 };
 
-/**
- * The registry of file data formats.
- *
- * Format 1's constants come from `StoreTypes.hpp`, because those described this format before it
- * had a name.
- *
- * A `cipherType` value that has been issued must not be redefined — a file names its format by this
- * number and nothing else, so redefining one silently changes what an existing file means. All
- * three were redefined once, at 3.0.0, when `chunkKey` moved to HMAC; 3.0.0 breaks formats by
- * design, and issuing three new ids for a derivation change nobody was meant to keep reading would
- * have doubled the registry to describe data that no longer exists. That was a one-off licensed by
- * the release, not a precedent.
- */
 constexpr std::size_t GCM_IV_LENGTH = 12;
 constexpr std::size_t GCM_TAG_LENGTH = 16;
 
@@ -88,19 +75,34 @@ constexpr std::size_t GCM_TAG_LENGTH = 16;
  */
 constexpr std::size_t CIPHER_KEY_LENGTH = 32;
 
+/**
+ * The registry of file data formats.
+ *
+ * The CBC+HMAC entry's constants come from `StoreTypes.hpp`, because those described that layout
+ * before it had a name.
+ *
+ * A `cipherType` value that has been issued must not be redefined — a file names its format by this
+ * number and nothing else, so redefining one silently changes what an existing file means. When
+ * `chunkKey` moved to HMAC at 3.0.0 these three formats therefore took **new** ids (4, 5, 6) rather
+ * than keeping 1, 2 and 3 with a different derivation behind them. The old ids are absent from this
+ * table on purpose: a pre-3.0.0 file is then refused by `requireSpec` as an unknown format, which is
+ * what it is, instead of reaching `decryptChunk` and failing there as a bad authenticator — a
+ * failure that reads as corruption and sends the reader looking for a storage bug.
+ */
 constexpr std::array<CipherSpec, 3> CIPHERS{{
     {FileCipher::AES_CBC_HMAC_SHA256, Mode::CbcHmac, IV_SIZE, HMAC_SIZE, CHUNK_PADDING, HMAC_SIZE + IV_SIZE,
      core::SuiteId::Aes256GcmSha256},
     {FileCipher::AES_GCM, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0, GCM_IV_LENGTH + GCM_TAG_LENGTH,
      core::SuiteId::Aes256GcmSha256},
-    // Frame identical to format 2 — an AEAD tag is 16 B whatever the hash function, so the
+    // Frame identical to AES_GCM — an AEAD tag is 16 B whatever the hash function, so the
     // hash-table stride and chunk addressing do not change. Only the hash differs.
     {FileCipher::AES_GCM_SHA512, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0, GCM_IV_LENGTH + GCM_TAG_LENGTH,
      core::SuiteId::Aes256GcmSha512},
 }};
 
-/// The file format matching a container suite. The mode is always AEAD — container suites are
-/// AEAD, and format 1 (CBC+HMAC) exists only as the legacy layout of files already written.
+/// The file format matching a container suite. Only AEAD formats are eligible, because container
+/// suites are AEAD; AES_CBC_HMAC_SHA256 is therefore never reached this way, and is written only
+/// when it is the build default or named outright through `forType`.
 constexpr int64_t cipherForHashSuite(core::SuiteId suite) {
     for (const auto& spec : CIPHERS) {
         if (spec.mode == Mode::Gcm && spec.hashSuite == suite) {
@@ -249,19 +251,22 @@ std::string FileCipher::chunkKey(const std::string& fileKey, std::uint64_t index
     // unseparated byte string as the key. Nothing here was exploitable — the derived keys never
     // leave the client — but it was the wrong primitive for a key derivation, and the group side
     // already did it the right way (`GroupEnvelopeEncryptor::chunkKey`). 3.0.0 carries no backward
-    // compatibility, so the two could finally be brought into line instead of a fourth `cipherType`
-    // being issued for the difference.
+    // compatibility, so the two could finally be brought into line.
+    //
+    // It is a format change even though no frame byte moves, which is why all three formats took new
+    // `cipherType` ids for it: the same file key and index yield a different chunk key than before,
+    // so an old file does not open under this derivation. See the registry comment above.
     //
     // Binding the index makes a chunk unusable in any other position, binding the file key makes it
     // unusable in any other file, and the label keeps this separate from any future derivation off
     // the same key.
     //
-    // The hash is the format's, not a constant: formats 1 and 2 are SHA-256 and format 3 SHA-512,
-    // which is the whole of what format 3 is.
+    // The hash is the format's, not a constant: AES_CBC_HMAC_SHA256 and AES_GCM are SHA-256 and
+    // AES_GCM_SHA512 is SHA-512, which is the whole of what that format is.
     const std::string prf =
         core::CryptoSuite::forId(requireSpec(_type).hashSuite).mac(fileKey, CHUNK_KEY_LABEL + indexToBE(index));
     // Cut to the cipher's key length, which the hash knows nothing about: HMAC-SHA512 gives 64 bytes
-    // and AES-256 takes 32. For formats 1 and 2 this is a no-op. It matters for format 3, and not
+    // and AES-256 takes 32. For the SHA-256 formats this is a no-op. It matters for AES_GCM_SHA512, and not
     // only cosmetically: pmx-crypto passes `key.data()` straight through without a length check
     // (`issue-pmx-crypto-key-iv-length`) and OpenSSL then reads the first 32 bytes in silence, so an
     // oversized key appears to work right up until that check is added. Note that
@@ -299,7 +304,7 @@ std::string FileCipher::decryptChunk(const std::string& chunkKey, const IChunkEn
         }
         const std::string iv = chunk.data.substr(0, spec.ivLength);
         // The AEAD mode authenticates on its own: a bad tag surfaces from the cipher rather than
-        // from a separate comparison. We translate it to the same exception format 1 raises, so the
+        // from a separate comparison. We translate it to the same exception AES_CBC_HMAC_SHA256 raises, so the
         // caller does not have to tell the formats apart.
         try {
             return symDecrypt(cs::SymAlg::Aes256Gcm, chunkKey, iv, chunk.data.substr(spec.ivLength));

@@ -48,6 +48,7 @@ limitations under the License.
 #include <privmx/endpoint/store/ServerApi.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
 #include <privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp>
+#include <privmx/endpoint/store/encryptors/fileData/FileCipher.hpp>
 #include <privmx/endpoint/stream/ServerApi.hpp>
 #include <privmx/endpoint/thread/ServerApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
@@ -74,7 +75,8 @@ struct StoreApiImplTestAccess {
         const std::string key(32, 'k');
         FileEncryptionParams params;
         params.fileDecryptionParams = FileDecryptionParams{
-            .fileId = fileId, .resourceId = "r", .sizeOnServer = 0, .originalSize = 0, .cipherType = 1,
+            .fileId = fileId, .resourceId = "r", .sizeOnServer = 0, .originalSize = 0,
+            .cipherType = FileCipher::AES_CBC_HMAC_SHA256,
             .chunkSize = 1024, .key = key, .hmac = core::FormatHash::hmacSha256(key, ""), .version = 1
         };
         return api._fileHandleManager
@@ -828,7 +830,7 @@ struct OneFileStore {
         store::dynamic::InternalStoreFileMeta internal;
         internal.version = 4;
         internal.size = 0;
-        internal.cipherType = 1;
+        internal.cipherType = store::FileCipher::AES_CBC_HMAC_SHA256;
         internal.chunkSize = 1024;
         internal.key = privmx::utils::Base64::from(std::string(32, 'c'));
         internal.hmac = privmx::utils::Base64::from(core::FormatHash::hmacSha256(std::string(32, 'c'), ""));

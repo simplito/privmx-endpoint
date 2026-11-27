@@ -42,37 +42,52 @@ namespace store {
  * Adding a format means an entry in the table in `FileCipher.cpp` plus its own `encryptChunk` and
  * `decryptChunk`. A `cipherType` value that has been issued must never be redefined — files written
  * with the old value are still on disk.
+ *
+ * **Ids 1, 2 and 3 are retired and must never be reissued.** They named these same three frame
+ * layouts up to 3.0.0, when `chunkKey` moved from a bare digest to an HMAC. That is a different
+ * format: the same file key and index now yield a different chunk key, so a file written under the
+ * old derivation does not decrypt under the new one. Rather than let one number mean two things
+ * depending on when the file was written, the HMAC formats took fresh ids. 3.0.0 carries no
+ * backward compatibility and nothing is expected to read a pre-3.0.0 file, but it should be refused
+ * *as an unknown format* — which is what the retired ids now do — and not fail several layers down
+ * as a chunk whose authenticator does not match, where it is indistinguishable from corruption.
  */
 class FileCipher {
 public:
     /**
      * AES-256-CBC + PKCS#7, HMAC-SHA256 over `IV || ciphertext`.
      * Frame: `[32 B HMAC][16 B IV][ciphertext]`; the hash-table entry is the HMAC at the front.
+     *
+     * Replaces retired id 1, which was the same frame with a digest-derived chunk key.
      */
-    static constexpr int64_t AES_CBC_HMAC_SHA256 = 1;
+    static constexpr int64_t AES_CBC_HMAC_SHA256 = 4;
 
     /**
      * AES-256-GCM, SHA-256 hashes.
      * Frame: `[12 B IV][ciphertext || 16 B tag]`; the hash-table entry is the tag at the **end**.
      *
-     * Against format 1: no block padding and half the hash-table stride (16 instead of 32 B), so
-     * both the file on the server and its hash table are smaller. Authentication is the AEAD mode's
-     * own, instead of a separate HMAC prepended to the frame.
+     * Against the CBC+HMAC format: no block padding and half the hash-table stride (16 instead of
+     * 32 B), so both the file on the server and its hash table are smaller. Authentication is the
+     * AEAD mode's own, instead of a separate HMAC prepended to the frame.
+     *
+     * Replaces retired id 2.
      */
-    static constexpr int64_t AES_GCM = 2;
+    static constexpr int64_t AES_GCM = 5;
 
     /**
      * AES-256-GCM, SHA-512 hashes.
      *
-     * The frame is **identical** to format 2 — an AEAD tag is 16 B whatever the hash function, so
+     * The frame is **identical** to `AES_GCM` — an AEAD tag is 16 B whatever the hash function, so
      * the hash-table stride and chunk addressing do not change. What differs is what the chunk key
      * and the table's top hash are computed with.
      *
      * It exists so that a container naming a SHA-512 suite gets its file data computed with the same
      * hash. Without this format a file in such a container would still use SHA-256 — the suite
      * choice would stop at the `store` boundary.
+     *
+     * Replaces retired id 3.
      */
-    static constexpr int64_t AES_GCM_SHA512 = 3;
+    static constexpr int64_t AES_GCM_SHA512 = 6;
 
     /**
      * @brief The format with the given marker.
@@ -115,7 +130,7 @@ public:
      *
      * Checked before anything is decrypted: it catches the case where the server serves a chunk
      * from a different part of the file. Where the hash sits in the frame depends on the format —
-     * format 1 puts it at the front, format 2 uses the AEAD tag at the end — which is why
+     * AES_CBC_HMAC_SHA256 puts it at the front, AES_GCM uses the AEAD tag at the end — which is why
      * `FileCipher` knows this and the caller does not.
      */
     bool frameCarriesHash(const std::string& chunkData, const std::string& hash) const;

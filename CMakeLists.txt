@@ -88,12 +88,15 @@ set(PRIVMX_DEFAULT_FILE_CIPHER "aes256cbc-hmac-sha256" CACHE STRING "File data f
 set_property(CACHE PRIVMX_DEFAULT_FILE_CIPHER PROPERTY STRINGS
     "aes256cbc-hmac-sha256" "aes256gcm" "aes256gcm-sha512")
 
+# The ids are 4, 5 and 6, not 1, 2 and 3: those three were retired at 3.0.0 when the per-chunk key
+# derivation moved from a bare digest to an HMAC. The frame layouts did not change, the derivation
+# did, so they are different formats and had to say so. See FileCipher.hpp.
 if(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256cbc-hmac-sha256")
-    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 1)
+    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 4)
 elseif(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256gcm")
-    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 2)
+    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 5)
 elseif(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256gcm-sha512")
-    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 3)
+    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 6)
 else()
     message(FATAL_ERROR
         "Unknown PRIVMX_DEFAULT_FILE_CIPHER='${PRIVMX_DEFAULT_FILE_CIPHER}'. "

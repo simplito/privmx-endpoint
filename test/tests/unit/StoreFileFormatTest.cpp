@@ -21,14 +21,17 @@ limitations under the License.
  * frame layout. If a format change is intended, these numbers should be changed deliberately — not
  * adjusted to whatever the new result happens to be.
  *
- * Chunk format 1 (cipherType = 1):
+ * Chunk format AES_CBC_HMAC_SHA256 (cipherType = 4):
  *     [32 B HMAC-SHA256][16 B IV][AES-256-CBC + PKCS#7]
  *   chunkKey = hmacSha256(fileKey, "privmx/store/file-chunk" || BE32(index))
  *   the HMAC is computed with chunkKey over (IV || ciphertext)
  *
- * Chunk format 2 (cipherType = 2):
+ * Chunk format AES_GCM (cipherType = 5):
  *     [12 B IV][AES-256-GCM || 16 B tag]
  *   no padding; the hash-table entry is the AEAD tag from the **end** of the frame
+ *
+ * Ids 1, 2 and 3 named these same frame layouts with a digest-derived chunk key and were retired at
+ * 3.0.0; `RetiredTypesAreRejected` keeps them out of the registry.
  *
  * The write format is picked by `PRIVMX_DEFAULT_FILE_CIPHER` at configure time, so no test
  * describing a particular format may rely on `defaultForWrite()` — the format is named explicitly.
@@ -68,7 +71,7 @@ std::string repeat(char c, size_t n) {
  *
  * The tests below describe one particular format, not "whichever this build happens to write with"
  * — and the write format is chosen at configure time by `PRIVMX_DEFAULT_FILE_CIPHER`. Without this,
- * switching the default format broke these tests even though format 1 had not changed.
+ * switching the default format broke these tests even though AES_CBC_HMAC_SHA256 had not changed.
  */
 FileCipher cbc() {
     return FileCipher::forType(FileCipher::AES_CBC_HMAC_SHA256);
@@ -265,8 +268,20 @@ TEST(StoreFileFormat, HashListAppendsAndTruncates) {
 TEST(StoreFileCipher, DefaultForWriteIsAFormatThisBuildCanRead) {
     EXPECT_TRUE(FileCipher::isKnown(FileCipher::defaultForWrite().type()));
     // Once issued, a marker value must never be redefined.
-    EXPECT_EQ(1, FileCipher::AES_CBC_HMAC_SHA256);
-    EXPECT_EQ(2, FileCipher::AES_GCM);
+    EXPECT_EQ(4, FileCipher::AES_CBC_HMAC_SHA256);
+    EXPECT_EQ(5, FileCipher::AES_GCM);
+    EXPECT_EQ(6, FileCipher::AES_GCM_SHA512);
+}
+
+/// Ids 1, 2 and 3 named these same frame layouts with a digest-derived chunk key, up to 3.0.0. They
+/// are retired, not merely unused: reissuing one would make a pre-3.0.0 file look like a format this
+/// build can read, and it would then fail on a chunk authenticator — the one failure shape that is
+/// indistinguishable from storage corruption. Refused at the format gate instead, by name.
+TEST(StoreFileCipher, RetiredTypesAreRejected) {
+    for (const int64_t retired : {int64_t{1}, int64_t{2}, int64_t{3}}) {
+        EXPECT_FALSE(FileCipher::isKnown(retired)) << "cipherType " << retired << " is retired";
+        EXPECT_THROW(FileCipher::forType(retired), UnsupportedCipherTypeException);
+    }
 }
 
 /// Checks that `PRIVMX_DEFAULT_FILE_CIPHER` actually **reached the compiled library**, rather than
@@ -393,8 +408,8 @@ TEST(StoreFileCipherAllFormats, HashListStrideFollowsTheFormat) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Format 2 (cipherType = 2): AES-256-GCM, frame `[12 B IV][ciphertext || 16 B tag]`.
-// As literal as with format 1 — these numbers address chunks within the file.
+// AES_GCM (cipherType = 5): AES-256-GCM, frame `[12 B IV][ciphertext || 16 B tag]`.
+// As literal as with AES_CBC_HMAC_SHA256 — these numbers address chunks within the file.
 // ---------------------------------------------------------------------------------------------
 
 namespace {
@@ -425,7 +440,7 @@ TEST(StoreFileGcmFormat, ChunkLayoutIsIvThenCipherWithTrailingTag) {
 
     // No padding: the length is exactly IV + plaintext + tag.
     EXPECT_EQ(GCM_IV + 100u + GCM_TAG, chunk.data.size());
-    // The chunk hash is the AEAD tag, i.e. the **end** of the frame — unlike in format 1.
+    // The chunk hash is the AEAD tag, i.e. the **end** of the frame — unlike in AES_CBC_HMAC_SHA256.
     EXPECT_EQ(GCM_TAG, chunk.hmac.size());
     EXPECT_EQ(chunk.hmac, chunk.data.substr(chunk.data.size() - GCM_TAG));
 }
@@ -469,9 +484,9 @@ TEST(StoreFileGcmFormat, TamperedCiphertextIsRejectedByTheAeadTag) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Format 3 (cipherType = 3): AES-256-GCM with SHA-512 hashes.
+// AES_GCM_SHA512 (cipherType = 6): AES-256-GCM with SHA-512 hashes.
 //
-// The frame layout is **identical** to format 2 — an AEAD tag is 16 B whatever the hash function.
+// The frame layout is **identical** to AES_GCM — an AEAD tag is 16 B whatever the hash function.
 // They differ only in what the chunk key and the table's top hash are computed with. The format
 // exists so that a container naming a SHA-512 suite gets its file data computed with the same hash.
 // ---------------------------------------------------------------------------------------------
@@ -512,7 +527,7 @@ TEST(StoreFileCipher, ChunkKeyIsTheCiphersKeyLengthInEveryFormat) {
 /**
  * The derivation is HMAC keyed by the file key — not the bare digest it was before 3.0.0.
  *
- * `ChunkKeyAndHmacFollowTheDocumentedFormula` pins this for format 1 through the frame it produces;
+ * `ChunkKeyAndHmacFollowTheDocumentedFormula` pins this for AES_CBC_HMAC_SHA256 through the frame it produces;
  * this says it directly, for the GCM formats too, and names the construction that was replaced so a
  * revert to `H(fileKey || BE32(index))` fails here rather than merely changing what gets written.
  */
@@ -531,7 +546,7 @@ TEST(StoreFileCipher, ChunkKeyIsAKeyedPrfAndNotABareDigest) {
 }
 
 /// The point of this format: the same layout, a different hash. If the chunk key came out the same,
-/// format 3 would be no more than another label on format 2. With both keys now cut to 32 bytes this
+/// AES_GCM_SHA512 would be no more than another label on AES_GCM. With both keys now cut to 32 bytes this
 /// also says the truncation did not collapse the two formats into one.
 TEST(StoreFileSha512Format, ChunkKeyAndTopHashDifferFromFormatTwo) {
     EXPECT_NE(gcm().chunkKey(KEY, 0), gcm512().chunkKey(KEY, 0));
