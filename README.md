@@ -23,14 +23,19 @@ PrivMX enables communication through **text messages**, **secure file storage** 
 ### Prerequisites
 
 - CMake ≥ 3.10.2
-- C++17-capable compiler (GCC or Clang)
+- C++20-capable compiler (GCC or Clang)
 - [Conan 2.x](https://conan.io/) (recommended) — or manually provided pre-built libraries
+- Git, with submodules initialised — cryptography lives in the `pmx-crypto` submodule and is built from source:
 
-The library always uses the driver backends (`privmxdrvcrypto`, `privmxdrvecc`, `privmxdrvnet`) for crypto and networking. These are resolved automatically by Conan or must be supplied manually when building without it.
+```bash
+git submodule update --init --recursive
+```
+
+Cryptography is provided entirely by **pmx-crypto**; there are no crypto driver backends any more. Of the `privmxdrv*` drivers only networking (`privmxdrvnet`) remains, resolved automatically by Conan or supplied manually when building without it.
 
 ### 1. Building with Conan (Recommended)
 
-Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`, `privmxdrvcrypto`, `privmxdrvecc`, `privmxdrvnet`, `gtest`.
+Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`, `privmxdrvnet`, `sqlite3`, `gtest`, `readline`.
 
 **Quick start:**
 ```bash
@@ -60,14 +65,15 @@ When Conan is not available, CMake will attempt to locate the following librarie
 |---------|---------|
 | poco | 1.13.2 |
 | pson | 1.0.7 |
-| openssl | ≥ 3.0, < 3.1 |
-| gmp | 6.2.1 |
-| privmxdrvcrypto | 1.0.3 |
-| privmxdrvecc | 1.0.2 |
+| openssl | ≥ 3.5.9, < 3.6 |
+| gmp | 6.3.0 |
 | privmxdrvnet | 1.0.3 |
+| sqlite3 | ≥ 3.50.4 |
 | gtest | ≥ 1.15.0 *(optional, needed for tests)* |
 | readline | ≥ 8.2.0 *(optional, needed for CLI)* |
 | libwebrtc | m125 *(optional, needed for WebRTC streaming)* |
+
+pmx-crypto is not listed here: it is a git submodule, added with `add_subdirectory` and built together with the library, so `find_package` never looks for it.
 
 ```bash
 mkdir -p build && cd build
