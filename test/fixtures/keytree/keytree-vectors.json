@@ -313,6 +313,35 @@
   "spaceStatement": [
     {
       "statement": {
+        "addedGroups": [
+          {
+            "groupId": "sales",
+            "role": "manager",
+            "groupKeyVersion": 3,
+            "groupPubKey": "SALES-PK"
+          },
+          {
+            "groupId": "Support",
+            "role": "user",
+            "groupKeyVersion": 1,
+            "groupPubKey": "SUPPORT-PK"
+          }
+        ],
+        "addedUsers": [
+          {
+            "userId": "bob",
+            "pubKey": "BOB-PK",
+            "role": "user"
+          },
+          {
+            "userId": "alice",
+            "pubKey": "ALICE-PK",
+            "role": "manager"
+          }
+        ],
+        "removedGroups": [],
+        "removedUsers": [],
+        "refreshedGroups": [],
         "spaceId": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
         "contextId": "ctx-1",
         "seq": 1,
@@ -321,143 +350,113 @@
         "date": 1760000000000,
         "keyVersion": 1,
         "keyCommit": "d96fa8ef86fce6f4b2b568ba5b4101a15d101a1b96f832a604e7831d066a792d",
-        "groups": [
-          {
-            "groupId": "sales",
-            "role": "manager",
-            "groupKeyVersion": 3,
-            "groupPubKey": "SALES-PK"
-          },
-          {
-            "groupId": "Support",
-            "role": "user",
-            "groupKeyVersion": 1,
-            "groupPubKey": "SUPPORT-PK"
-          }
-        ],
-        "users": [
-          {
-            "userId": "bob",
-            "pubKey": "BOB-PK",
-            "role": "user"
-          },
-          {
-            "userId": "alice",
-            "pubKey": "ALICE-PK",
-            "role": "manager"
-          }
-        ],
         "signer": "alice",
         "signerPubKey": "ALICE-PK",
-        "via": ""
+        "via": "",
+        "rosterHash": "9e828b60439f608a6855f60008ddba333a5a265ba5ac705584c350b6fea0929d"
       },
-      "recipientsHashHex": "935373b91156bd6f9d7221c5d299dc7f1f3612beae11a76cd7f494dbf4942cc2",
-      "signedBytesHex": "706d782d73706163652d73746174656d656e7400010000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d310000000000000001000000000100000199c82cc0000000000000000001d96fa8ef86fce6f4b2b568ba5b4101a15d101a1b96f832a604e7831d066a792d935373b91156bd6f9d7221c5d299dc7f1f3612beae11a76cd7f494dbf4942cc200000005616c69636500000008414c4943452d504b00000000",
-      "viaBytesHex": "706d782d73706163652d766961007bf35a62b64dc4acae1424b34a1b27304fe830ddcba2ed34a365328ca321da2b"
+      "rosterHashHex": "9e828b60439f608a6855f60008ddba333a5a265ba5ac705584c350b6fea0929d",
+      "signedBytesHex": "706d782d73706163652d73746174656d656e7400020000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d310000000000000001000000000100000199c82cc0000000000000000001d96fa8ef86fce6f4b2b568ba5b4101a15d101a1b96f832a604e7831d066a792d9e828b60439f608a6855f60008ddba333a5a265ba5ac705584c350b6fea0929d0000000200000007537570706f7274000000047573657200000000000000010000000a535550504f52542d504b0000000573616c6573000000076d616e6167657200000000000000030000000853414c45532d504b0000000200000005616c69636500000008414c4943452d504b000000076d616e6167657200000003626f6200000006424f422d504b000000047573657200000000000000000000000000000005616c69636500000008414c4943452d504b00000000",
+      "signedBytesSha256Hex": "40e20654f9640126e3e27e64de294a1242b22e84bf671b6a3c0cbb809ba947a5",
+      "viaBytesHex": "706d782d73706163652d7669610040e20654f9640126e3e27e64de294a1242b22e84bf671b6a3c0cbb809ba947a5"
     },
     {
       "statement": {
+        "addedGroups": [],
+        "addedUsers": [],
+        "removedGroups": [],
+        "removedUsers": [],
+        "refreshedGroups": [
+          {
+            "groupId": "sales",
+            "groupKeyVersion": 4,
+            "groupPubKey": "SALES-PK-4"
+          }
+        ],
         "spaceId": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
         "contextId": "ctx-1",
         "seq": 2,
         "prevDigest": "3333333333333333333333333333333333333333333333333333333333333333",
         "op": "rotate",
-        "date": 1760000000000,
+        "date": 1760000000001,
         "keyVersion": 2,
         "keyCommit": "c3045a778d0ba99f0f939c4822d25b12e16d33f4c40fedc3fdaee464bdb55b29",
-        "groups": [
-          {
-            "groupId": "sales",
-            "role": "manager",
-            "groupKeyVersion": 3,
-            "groupPubKey": "SALES-PK"
-          },
-          {
-            "groupId": "Support",
-            "role": "user",
-            "groupKeyVersion": 1,
-            "groupPubKey": "SUPPORT-PK"
-          }
-        ],
-        "users": [
-          {
-            "userId": "bob",
-            "pubKey": "BOB-PK",
-            "role": "user"
-          },
-          {
-            "userId": "alice",
-            "pubKey": "ALICE-PK",
-            "role": "manager"
-          }
-        ],
         "signer": "carol",
         "signerPubKey": "CAROL-PK",
-        "via": "sales"
+        "via": "sales",
+        "rosterHash": "200da0bed222246e5c5cc38e4820b916eca661f491daf7559e5b1e623396b21d"
       },
-      "recipientsHashHex": "935373b91156bd6f9d7221c5d299dc7f1f3612beae11a76cd7f494dbf4942cc2",
-      "signedBytesHex": "706d782d73706163652d73746174656d656e7400010000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d3100000000000000020000002033333333333333333333333333333333333333333333333333333333333333330400000199c82cc0000000000000000002c3045a778d0ba99f0f939c4822d25b12e16d33f4c40fedc3fdaee464bdb55b29935373b91156bd6f9d7221c5d299dc7f1f3612beae11a76cd7f494dbf4942cc2000000056361726f6c000000084341524f4c2d504b0000000573616c6573",
-      "viaBytesHex": "706d782d73706163652d766961005d392a49911166e2ae497581adc5fdb7ca2f39f96bb29c70713a829fc6b02c01"
+      "rosterHashHex": "200da0bed222246e5c5cc38e4820b916eca661f491daf7559e5b1e623396b21d",
+      "signedBytesHex": "706d782d73706163652d73746174656d656e7400020000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d3100000000000000020000002033333333333333333333333333333333333333333333333333333333333333330400000199c82cc0010000000000000002c3045a778d0ba99f0f939c4822d25b12e16d33f4c40fedc3fdaee464bdb55b29200da0bed222246e5c5cc38e4820b916eca661f491daf7559e5b1e623396b21d00000000000000000000000000000000000000010000000573616c657300000000000000040000000a53414c45532d504b2d34000000056361726f6c000000084341524f4c2d504b0000000573616c6573",
+      "signedBytesSha256Hex": "36ce4f9a3c2e053208cd9ba0b5558b9a4caaa8b21f5fe75f687a2becac6b548b",
+      "viaBytesHex": "706d782d73706163652d7669610036ce4f9a3c2e053208cd9ba0b5558b9a4caaa8b21f5fe75f687a2becac6b548b"
     },
     {
       "statement": {
+        "addedGroups": [],
+        "addedUsers": [],
+        "removedGroups": [
+          "Support"
+        ],
+        "removedUsers": [
+          "bob"
+        ],
+        "refreshedGroups": [],
         "spaceId": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
         "contextId": "ctx-1",
         "seq": 3,
         "prevDigest": "4444444444444444444444444444444444444444444444444444444444444444",
         "op": "remove",
-        "date": 1760000000000,
+        "date": 1760000000002,
         "keyVersion": 3,
         "keyCommit": "df7b850ed30784a5016f00dbfa7dee916d4b82b397685cdd29a5b7c91d90c3f5",
-        "groups": [
-          {
-            "groupId": "sales",
-            "role": "manager",
-            "groupKeyVersion": 3,
-            "groupPubKey": "SALES-PK"
-          }
-        ],
-        "users": [],
-        "signer": "carol",
-        "signerPubKey": "CAROL-PK",
-        "via": "sales"
+        "signer": "alice",
+        "signerPubKey": "ALICE-PK",
+        "via": "",
+        "rosterHash": "e8cc89d5e5a38febaa396428215f00899a1733aff4cd6190a8d5b60930fa6cee"
       },
-      "recipientsHashHex": "97024577ac9e160cf6a30704c44f1f6cf950e5edf8d2b5ae29a3be1f4ab46e3f",
-      "signedBytesHex": "706d782d73706163652d73746174656d656e7400010000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d3100000000000000030000002044444444444444444444444444444444444444444444444444444444444444440300000199c82cc0000000000000000003df7b850ed30784a5016f00dbfa7dee916d4b82b397685cdd29a5b7c91d90c3f597024577ac9e160cf6a30704c44f1f6cf950e5edf8d2b5ae29a3be1f4ab46e3f000000056361726f6c000000084341524f4c2d504b0000000573616c6573",
-      "viaBytesHex": "706d782d73706163652d76696100931f95a9ee63fb4de575cce569d09927e156aa850cafc5c620794977db33e11c"
+      "rosterHashHex": "e8cc89d5e5a38febaa396428215f00899a1733aff4cd6190a8d5b60930fa6cee",
+      "signedBytesHex": "706d782d73706163652d73746174656d656e7400020000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d3100000000000000030000002044444444444444444444444444444444444444444444444444444444444444440300000199c82cc0020000000000000003df7b850ed30784a5016f00dbfa7dee916d4b82b397685cdd29a5b7c91d90c3f5e8cc89d5e5a38febaa396428215f00899a1733aff4cd6190a8d5b60930fa6cee00000000000000000000000100000007537570706f72740000000100000003626f620000000000000005616c69636500000008414c4943452d504b00000000",
+      "signedBytesSha256Hex": "f2b5f96babb464770e73e4cb0058910c0ac019e4b1373aa4f94d08e3de74da2d",
+      "viaBytesHex": "706d782d73706163652d76696100f2b5f96babb464770e73e4cb0058910c0ac019e4b1373aa4f94d08e3de74da2d"
     },
     {
       "statement": {
+        "addedGroups": [
+          {
+            "groupId": "billing",
+            "role": "user",
+            "groupKeyVersion": 2,
+            "groupPubKey": "BILLING-PK"
+          }
+        ],
+        "addedUsers": [
+          {
+            "userId": "dave",
+            "pubKey": "DAVE-PK",
+            "role": "user"
+          }
+        ],
+        "removedGroups": [],
+        "removedUsers": [],
+        "refreshedGroups": [],
         "spaceId": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
         "contextId": "ctx-1",
         "seq": 4,
         "prevDigest": "5555555555555555555555555555555555555555555555555555555555555555",
         "op": "add",
-        "date": 1760000000000,
+        "date": 1760000000003,
         "keyVersion": 3,
         "keyCommit": "df7b850ed30784a5016f00dbfa7dee916d4b82b397685cdd29a5b7c91d90c3f5",
-        "groups": [
-          {
-            "groupId": "sales",
-            "role": "manager",
-            "groupKeyVersion": 3,
-            "groupPubKey": "SALES-PK"
-          }
-        ],
-        "users": [
-          {
-            "userId": "bob",
-            "pubKey": "BOB-PK",
-            "role": "user"
-          }
-        ],
-        "signer": "carol",
-        "signerPubKey": "CAROL-PK",
-        "via": "sales"
+        "signer": "alice",
+        "signerPubKey": "ALICE-PK",
+        "via": "",
+        "rosterHash": "adde971afc65e4074dd07889ae4ade84fe2bf47efad83aec355b76e6105a378e"
       },
-      "recipientsHashHex": "a75f7bfaf053fed2a781b07a4fe35b1cec19b1320db61b1f307668eb5e86f2d6",
-      "signedBytesHex": "706d782d73706163652d73746174656d656e7400010000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d3100000000000000040000002055555555555555555555555555555555555555555555555555555555555555550200000199c82cc0000000000000000003df7b850ed30784a5016f00dbfa7dee916d4b82b397685cdd29a5b7c91d90c3f5a75f7bfaf053fed2a781b07a4fe35b1cec19b1320db61b1f307668eb5e86f2d6000000056361726f6c000000084341524f4c2d504b0000000573616c6573",
-      "viaBytesHex": "706d782d73706163652d766961003324126ed8f64fb152435580922d34a9dea61c9a539a3b32a5020c76ed571ede"
+      "rosterHashHex": "adde971afc65e4074dd07889ae4ade84fe2bf47efad83aec355b76e6105a378e",
+      "signedBytesHex": "706d782d73706163652d73746174656d656e7400020000004035613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561356135613561000000056374782d3100000000000000040000002055555555555555555555555555555555555555555555555555555555555555550200000199c82cc0030000000000000003df7b850ed30784a5016f00dbfa7dee916d4b82b397685cdd29a5b7c91d90c3f5adde971afc65e4074dd07889ae4ade84fe2bf47efad83aec355b76e6105a378e000000010000000762696c6c696e67000000047573657200000000000000020000000a42494c4c494e472d504b00000001000000046461766500000007444156452d504b000000047573657200000000000000000000000000000005616c69636500000008414c4943452d504b00000000",
+      "signedBytesSha256Hex": "f8879f81cd16aa19f648a7fe2e59e2baf723a01647fb7bdc3174b6b4123004bf",
+      "viaBytesHex": "706d782d73706163652d76696100f8879f81cd16aa19f648a7fe2e59e2baf723a01647fb7bdc3174b6b4123004bf"
     }
   ],
   "spaceKeyCommit": [

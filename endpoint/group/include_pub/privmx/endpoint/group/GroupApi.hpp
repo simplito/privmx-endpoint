@@ -702,6 +702,9 @@ public:
     // the recipients are, which key is current and who made the Space is what the statements add up to, replayed
     // and checked here. The Bridge cannot add a recipient or plant a key, and neither can a user of the Context
     // who is no recipient: a statement needs a recipient's own signature, or the key of a recipient Group.
+    // A statement carries only what it changes (recipients added, removed, or a recipient Group's key moved to a
+    // later epoch) and a hash of the whole list after it, so its size does not grow with the number of recipients;
+    // the list itself is what the verified statements add up to.
     //
     // A stale key. When a recipient Group removes a member, that member still holds the Space's key. The Bridge
     // marks the Space (SpaceState::keyIsStale), and the next write by someone who can reach every recipient
@@ -831,7 +834,8 @@ public:
     SpaceOrigin getSpaceSequenceOrigin(const SequenceHandle sequence);
     /**
      * The Space's history: every change of its recipients and its key, verified from the creation. Each
-     * statement is signed by a recipient - themselves, or through a recipient Group, shown by that Group's key.
+     * statement is signed by a recipient - themselves, or through a recipient Group, shown by that Group's key -
+     * and each entry gives what it changed (SpaceLogEntry: added, removed, and refreshed Groups).
      */
     core::PagingList<SpaceLogEntry> getSpaceLog(const std::string& spaceId, const core::PagingQuery& pagingQuery);
 

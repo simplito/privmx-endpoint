@@ -31,7 +31,7 @@ TAGS = [
     b"pmx-tree-commit\0",
     b"pmx-group-rules-v1\0",
     b"pmx-space-id\0",
-    b"pmx-space-recipients\0",
+    b"pmx-space-roster-v1\0",
     b"pmx-space-key\0",
     b"pmx-space-statement\0",
     b"pmx-space-via\0",
@@ -155,18 +155,41 @@ ROLES = dict(
 RESEAT = dict(REMOVAL, seq=10, prevDigest="55" * 32, op="reseat", date=1760000000003, keyVersion=5, rosterVersion=11)
 
 
-# -- a Space's statements (proposals/space-log-format.md) ------------------------------------------------
+# -- a Space's statements (proposals/space-log-format.md), version 2: deltas + rosterHash ---------------------
+#
+#   RH = H("pmx-space-roster-v1\0" || u32(#groups) || (lp(groupId) || lp(role) || u64(groupKeyVersion) || lp(groupPubKey))*
+#          || u32(#users) || (lp(userId) || lp(pubKey) || lp(role))*)        the full roster after the statement
+#   SB = "pmx-space-statement\0" || u8(2) || lp(spaceId) || lp(contextId) || u64(seq) || lp(prevDigest) || u8(op)
+#        || u64(date) || u64(keyVersion) || keyCommit(32) || RH(32)
+#        || u32(#addedGroups) || (lp(groupId) || lp(role) || u64(groupKeyVersion) || lp(groupPubKey))*
+#        || u32(#addedUsers) || (lp(userId) || lp(pubKey) || lp(role))*
+#        || u32(#removedGroups) || lp(groupId)* || u32(#removedUsers) || lp(userId)*
+#        || u32(#refreshedGroups) || (lp(groupId) || u64(groupKeyVersion) || lp(groupPubKey))*
+#        || lp(signer) || lp(signerPubKey) || lp(via)
+#   every list sorted by id (UTF-8 bytes), whatever order it came in
 
 SPACE_OPS = {"create": 1, "add": 2, "remove": 3, "rotate": 4}
 
 
-def space_recipients_hash(groups, users):
-    b = tag("pmx-space-recipients") + u32(len(groups))
-    for g in sorted(groups, key=lambda g: g["groupId"].encode("utf-8")):
-        b += lp(g["groupId"]) + lp(g["role"]) + u64(g["groupKeyVersion"]) + lp(g["groupPubKey"])
+def by_id(entries, key):
+    return sorted(entries, key=lambda e: (e[key] if isinstance(e, dict) else e).encode("utf-8"))
+
+
+def space_group(g):
+    return lp(g["groupId"]) + lp(g["role"]) + u64(g["groupKeyVersion"]) + lp(g["groupPubKey"])
+
+
+def space_user(u):
+    return lp(u["userId"]) + lp(u["pubKey"]) + lp(u["role"])
+
+
+def space_roster_hash(groups, users):
+    b = tag("pmx-space-roster-v1") + u32(len(groups))
+    for g in by_id(groups, "groupId"):
+        b += space_group(g)
     b += u32(len(users))
-    for u in sorted(users, key=lambda u: u["userId"].encode("utf-8")):
-        b += lp(u["userId"]) + lp(u["pubKey"]) + lp(u["role"])
+    for u in by_id(users, "userId"):
+        b += space_user(u)
     return hashlib.sha256(b).digest()
 
 
@@ -178,16 +201,32 @@ def space_signed_bytes(s):
     prev = bytes.fromhex(s["prevDigest"])
     assert len(prev) == (0 if s["seq"] == 1 else 32)
     key_commit = bytes.fromhex(s["keyCommit"])
-    assert len(key_commit) == 32
-    return (
-        tag("pmx-space-statement") + u8(1) + lp(s["spaceId"]) + lp(s["contextId"]) + u64(s["seq"]) + lp(prev)
-        + u8(SPACE_OPS[s["op"]]) + u64(s["date"]) + u64(s["keyVersion"]) + key_commit
-        + space_recipients_hash(s["groups"], s["users"]) + lp(s["signer"]) + lp(s["signerPubKey"]) + lp(s["via"])
+    roster_hash = bytes.fromhex(s["rosterHash"])
+    assert len(key_commit) == 32 and len(roster_hash) == 32
+    b = tag("pmx-space-statement") + u8(2) + lp(s["spaceId"]) + lp(s["contextId"]) + u64(s["seq"]) + lp(prev)
+    b += u8(SPACE_OPS[s["op"]]) + u64(s["date"]) + u64(s["keyVersion"]) + key_commit + roster_hash
+    b += u32(len(s["addedGroups"])) + b"".join(space_group(g) for g in by_id(s["addedGroups"], "groupId"))
+    b += u32(len(s["addedUsers"])) + b"".join(space_user(u) for u in by_id(s["addedUsers"], "userId"))
+    b += u32(len(s["removedGroups"])) + b"".join(lp(x) for x in by_id(s["removedGroups"], None))
+    b += u32(len(s["removedUsers"])) + b"".join(lp(x) for x in by_id(s["removedUsers"], None))
+    b += u32(len(s["refreshedGroups"])) + b"".join(
+        lp(g["groupId"]) + u64(g["groupKeyVersion"]) + lp(g["groupPubKey"]) for g in by_id(s["refreshedGroups"], "groupId")
     )
+    return b + lp(s["signer"]) + lp(s["signerPubKey"]) + lp(s["via"])
 
 
 def space_via_bytes(s):
     return tag("pmx-space-via") + hashlib.sha256(space_signed_bytes(s)).digest()
+
+
+def space_apply(groups, users, s):
+    """The roster after `s`, deltas applied the way both sides apply them (validity is not this file's concern)."""
+    groups = [g for g in groups if g["groupId"] not in s["removedGroups"]]
+    users = [u for u in users if u["userId"] not in s["removedUsers"]]
+    for r in s["refreshedGroups"]:
+        groups = [dict(g, groupKeyVersion=r["groupKeyVersion"], groupPubKey=r["groupPubKey"])
+                  if g["groupId"] == r["groupId"] else g for g in groups]
+    return groups + s["addedGroups"], users + s["addedUsers"]
 
 
 SPACE_ID = "5a" * 32
@@ -200,20 +239,36 @@ SPACE_USERS = [
     {"userId": "bob", "pubKey": "BOB-PK", "role": "user"},
     {"userId": "alice", "pubKey": "ALICE-PK", "role": "manager"},
 ]
-SPACE_CREATE = {
-    "spaceId": SPACE_ID, "contextId": "ctx-1", "seq": 1, "prevDigest": "", "op": "create", "date": 1760000000000,
-    "keyVersion": 1, "keyCommit": space_key_commit(SPACE_ID, 1, SPACE_KEY), "groups": SPACE_GROUPS,
-    "users": SPACE_USERS, "signer": "alice", "signerPubKey": "ALICE-PK", "via": "",
-}
-SPACE_ROTATE_VIA_GROUP = dict(
-    SPACE_CREATE, seq=2, prevDigest="33" * 32, op="rotate", keyVersion=2,
-    keyCommit=space_key_commit(SPACE_ID, 2, "22" * 32), signer="carol", signerPubKey="CAROL-PK", via="sales",
-)
-SPACE_REMOVE = dict(
-    SPACE_ROTATE_VIA_GROUP, seq=3, prevDigest="44" * 32, op="remove", keyVersion=3,
-    keyCommit=space_key_commit(SPACE_ID, 3, "33" * 32), groups=SPACE_GROUPS[:1], users=[],
-)
-SPACE_ADD = dict(SPACE_REMOVE, seq=4, prevDigest="55" * 32, op="add", users=SPACE_USERS[:1])
+NO_DELTAS = {"addedGroups": [], "addedUsers": [], "removedGroups": [], "removedUsers": [], "refreshedGroups": []}
+
+
+def space_chain():
+    """Create, a rotation through sales that refreshes sales, a removal, an addition: each with its rosterHash."""
+    steps = [
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=1, prevDigest="", op="create", date=1760000000000,
+             keyVersion=1, keyCommit=space_key_commit(SPACE_ID, 1, SPACE_KEY), addedGroups=SPACE_GROUPS,
+             addedUsers=SPACE_USERS, signer="alice", signerPubKey="ALICE-PK", via=""),
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=2, prevDigest="33" * 32, op="rotate",
+             date=1760000000001, keyVersion=2, keyCommit=space_key_commit(SPACE_ID, 2, "22" * 32),
+             refreshedGroups=[{"groupId": "sales", "groupKeyVersion": 4, "groupPubKey": "SALES-PK-4"}],
+             signer="carol", signerPubKey="CAROL-PK", via="sales"),
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=3, prevDigest="44" * 32, op="remove",
+             date=1760000000002, keyVersion=3, keyCommit=space_key_commit(SPACE_ID, 3, "33" * 32),
+             removedGroups=["Support"], removedUsers=["bob"], signer="alice", signerPubKey="ALICE-PK", via=""),
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=4, prevDigest="55" * 32, op="add",
+             date=1760000000003, keyVersion=3, keyCommit=space_key_commit(SPACE_ID, 3, "33" * 32),
+             addedUsers=[{"userId": "dave", "pubKey": "DAVE-PK", "role": "user"}],
+             addedGroups=[{"groupId": "billing", "role": "user", "groupKeyVersion": 2, "groupPubKey": "BILLING-PK"}],
+             signer="alice", signerPubKey="ALICE-PK", via=""),
+    ]
+    groups, users, out = [], [], []
+    for s in steps:
+        groups, users = space_apply(groups, users, s)
+        out.append(dict(s, rosterHash=space_roster_hash(groups, users).hex()))
+    return out, groups, users
+
+
+SPACE_STATEMENTS, _, _ = space_chain()
 
 
 def vectors():
@@ -228,11 +283,12 @@ def vectors():
         "spaceStatement": [
             {
                 "statement": st,
-                "recipientsHashHex": space_recipients_hash(st["groups"], st["users"]).hex(),
+                "rosterHashHex": st["rosterHash"],
                 "signedBytesHex": space_signed_bytes(st).hex(),
+                "signedBytesSha256Hex": hashlib.sha256(space_signed_bytes(st)).hexdigest(),
                 "viaBytesHex": space_via_bytes(st).hex(),
             }
-            for st in (SPACE_CREATE, SPACE_ROTATE_VIA_GROUP, SPACE_REMOVE, SPACE_ADD)
+            for st in SPACE_STATEMENTS
         ],
         "spaceKeyCommit": [
             {"spaceId": SPACE_ID, "keyVersion": v, "keyHex": k, "expectedHex": space_key_commit(SPACE_ID, v, k)}

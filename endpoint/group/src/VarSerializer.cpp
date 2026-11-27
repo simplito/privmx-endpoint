@@ -330,6 +330,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::SpaceLogEntry>(const group::S
     obj->set("addedUsers", serialize(val.addedUsers));
     obj->set("removedGroups", serialize(val.removedGroups));
     obj->set("removedUsers", serialize(val.removedUsers));
+    obj->set("refreshedGroups", serialize(val.refreshedGroups));
     return obj;
 }
 

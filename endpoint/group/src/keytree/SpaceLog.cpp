@@ -21,6 +21,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
@@ -29,7 +30,7 @@ namespace be = privmx::endpoint::core::bigendian;
 namespace {
 
 std::string tag(const char* name) {
-    return std::string(name) + std::string(1, '\0');
+    return TreeCommits::tag(name);
 }
 
 bool isRole(const std::string& role) {
@@ -42,26 +43,35 @@ bool verifies(const std::string& pubKeyBase58, const std::string& bytes, const s
     } catch (...) { return false; }
 }
 
-// Who each recipient is and what they may do; a group's epoch and key are left out, since those may be refreshed.
-std::map<std::string, std::string> rolesOf(
-    const std::vector<SpaceLogGroup>& groups,
-    const std::vector<SpaceLogUser>& users
-) {
-    std::map<std::string, std::string> roles;
-    for (const SpaceLogGroup& group : groups) {
-        roles[tag("g") + group.groupId] = group.role;
-    }
-    for (const SpaceLogUser& user : users) {
-        roles[tag("u") + user.userId] = user.role + '\0' + user.pubKey;
-    }
-    return roles;
+void putGroup(std::string& out, const SpaceLogGroup& group) {
+    be::putLp(out, group.groupId);
+    be::putLp(out, group.role);
+    be::putU64(out, group.groupKeyVersion);
+    be::putLp(out, group.groupPubKey);
 }
 
-bool includes(const std::map<std::string, std::string>& whole, const std::map<std::string, std::string>& part) {
-    return std::all_of(part.begin(), part.end(), [&](const auto& entry) {
-        const auto found = whole.find(entry.first);
-        return found != whole.end() && found->second == entry.second;
-    });
+void putUser(std::string& out, const SpaceLogUser& user) {
+    be::putLp(out, user.userId);
+    be::putLp(out, user.pubKey);
+    be::putLp(out, user.role);
+}
+
+template<typename T, typename Id>
+std::vector<T> sortedBy(std::vector<T> values, Id id) {
+    std::sort(values.begin(), values.end(), [&](const T& a, const T& b) { return id(a) < id(b); });
+    return values;
+}
+
+const std::string& groupIdOf(const SpaceLogGroup& group) {
+    return group.groupId;
+}
+
+const std::string& userIdOf(const SpaceLogUser& user) {
+    return user.userId;
+}
+
+const std::string& itself(const std::string& id) {
+    return id;
 }
 
 } // namespace
@@ -98,24 +108,76 @@ std::string SpaceLog::opName(SpaceOp op) {
     throw std::invalid_argument("unknown space op");
 }
 
-std::string SpaceLog::recipientsHash(std::vector<SpaceLogGroup> groups, std::vector<SpaceLogUser> users) {
-    std::sort(groups.begin(), groups.end(), [](const auto& a, const auto& b) { return a.groupId < b.groupId; });
-    std::sort(users.begin(), users.end(), [](const auto& a, const auto& b) { return a.userId < b.userId; });
-    std::string preimage = tag("pmx-space-recipients");
+std::string SpaceLog::rosterHash(std::vector<SpaceLogGroup> groups, std::vector<SpaceLogUser> users) {
+    std::string preimage = tag("pmx-space-roster-v1");
     be::putU32(preimage, static_cast<std::uint32_t>(groups.size()));
-    for (const SpaceLogGroup& group : groups) {
-        be::putLp(preimage, group.groupId);
-        be::putLp(preimage, group.role);
-        be::putU64(preimage, group.groupKeyVersion);
-        be::putLp(preimage, group.groupPubKey);
+    for (const SpaceLogGroup& group : sortedBy(std::move(groups), groupIdOf)) {
+        putGroup(preimage, group);
     }
     be::putU32(preimage, static_cast<std::uint32_t>(users.size()));
-    for (const SpaceLogUser& user : users) {
-        be::putLp(preimage, user.userId);
-        be::putLp(preimage, user.pubKey);
-        be::putLp(preimage, user.role);
+    for (const SpaceLogUser& user : sortedBy(std::move(users), userIdOf)) {
+        putUser(preimage, user);
     }
     return privmx::crypto::Crypto::sha256(preimage);
+}
+
+void SpaceLog::setRoster(
+    SpaceStatement& statement,
+    const std::optional<SpaceLogState>& prior,
+    const std::vector<SpaceLogGroup>& groups,
+    const std::vector<SpaceLogUser>& users
+) {
+    statement.addedGroups.clear();
+    statement.addedUsers.clear();
+    statement.removedGroups.clear();
+    statement.removedUsers.clear();
+    statement.refreshedGroups.clear();
+    const std::vector<SpaceLogGroup> noGroups;
+    const std::vector<SpaceLogUser> noUsers;
+    const auto& priorGroups = prior.has_value() ? prior->groups : noGroups;
+    const auto& priorUsers = prior.has_value() ? prior->users : noUsers;
+    for (const SpaceLogGroup& was : priorGroups) {
+        const auto now = std::find_if(groups.begin(), groups.end(), [&](const auto& g) {
+            return g.groupId == was.groupId;
+        });
+        if (now == groups.end() || now->role != was.role) {
+            statement.removedGroups.push_back(was.groupId);
+        } else if (now->groupKeyVersion != was.groupKeyVersion || now->groupPubKey != was.groupPubKey) {
+            statement.refreshedGroups.push_back(
+                SpaceLogGroup{
+                    .groupId = now->groupId,
+                    .role = std::string(),
+                    .groupKeyVersion = now->groupKeyVersion,
+                    .groupPubKey = now->groupPubKey,
+                }
+            );
+        }
+    }
+    for (const SpaceLogGroup& group : groups) {
+        const auto was = std::find_if(priorGroups.begin(), priorGroups.end(), [&](const auto& g) {
+            return g.groupId == group.groupId;
+        });
+        if (was == priorGroups.end() || was->role != group.role) {
+            statement.addedGroups.push_back(group);
+        }
+    }
+    for (const SpaceLogUser& was : priorUsers) {
+        const auto now = std::find_if(users.begin(), users.end(), [&](const auto& u) {
+            return u.userId == was.userId;
+        });
+        if (now == users.end() || now->role != was.role || now->pubKey != was.pubKey) {
+            statement.removedUsers.push_back(was.userId);
+        }
+    }
+    for (const SpaceLogUser& user : users) {
+        const auto was = std::find_if(priorUsers.begin(), priorUsers.end(), [&](const auto& u) {
+            return u.userId == user.userId;
+        });
+        if (was == priorUsers.end() || was->role != user.role || was->pubKey != user.pubKey) {
+            statement.addedUsers.push_back(user);
+        }
+    }
+    statement.rosterHash = rosterHash(groups, users);
 }
 
 std::string SpaceLog::keyCommit(const std::string& spaceId, std::uint64_t keyVersion, const std::string& key) {
@@ -126,11 +188,13 @@ std::string SpaceLog::keyCommit(const std::string& spaceId, std::uint64_t keyVer
 }
 
 std::string SpaceLog::signedBytes(const SpaceStatement& statement) {
-    if (statement.keyCommit.size() != 32 || statement.prevDigest.size() != (statement.seq == 1 ? 0u : 32u)) {
+    if (statement.keyCommit.size() != 32 ||
+        statement.rosterHash.size() != 32 ||
+        statement.prevDigest.size() != (statement.seq == 1 ? 0u : 32u)) {
         throw std::invalid_argument("space statement hashes must be 32 bytes");
     }
     std::string bytes = tag("pmx-space-statement");
-    be::putU8(bytes, 1);
+    be::putU8(bytes, 2);
     be::putLp(bytes, statement.spaceId);
     be::putLp(bytes, statement.contextId);
     be::putU64(bytes, statement.seq);
@@ -139,7 +203,24 @@ std::string SpaceLog::signedBytes(const SpaceStatement& statement) {
     be::putU64(bytes, statement.date);
     be::putU64(bytes, statement.keyVersion);
     bytes += statement.keyCommit;
-    bytes += recipientsHash(statement.groups, statement.users);
+    bytes += statement.rosterHash;
+    // Each list by id, whatever order it came in.
+    be::putU32(bytes, static_cast<std::uint32_t>(statement.addedGroups.size()));
+    for (const SpaceLogGroup& group : sortedBy(statement.addedGroups, groupIdOf)) {
+        putGroup(bytes, group);
+    }
+    be::putU32(bytes, static_cast<std::uint32_t>(statement.addedUsers.size()));
+    for (const SpaceLogUser& user : sortedBy(statement.addedUsers, userIdOf)) {
+        putUser(bytes, user);
+    }
+    TreeCommits::putList(bytes, sortedBy(statement.removedGroups, itself));
+    TreeCommits::putList(bytes, sortedBy(statement.removedUsers, itself));
+    be::putU32(bytes, static_cast<std::uint32_t>(statement.refreshedGroups.size()));
+    for (const SpaceLogGroup& group : sortedBy(statement.refreshedGroups, groupIdOf)) {
+        be::putLp(bytes, group.groupId);
+        be::putU64(bytes, group.groupKeyVersion);
+        be::putLp(bytes, group.groupPubKey);
+    }
     be::putLp(bytes, statement.signer);
     be::putLp(bytes, statement.signerPubKey);
     be::putLp(bytes, statement.via);
@@ -174,7 +255,9 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
     if (statement.seq != seq) {
         throw broken("out of order");
     }
-    if (statement.keyCommit.size() != 32 || statement.prevDigest.size() != (seq == 1 ? 0u : 32u)) {
+    if (statement.keyCommit.size() != 32 ||
+        statement.rosterHash.size() != 32 ||
+        statement.prevDigest.size() != (seq == 1 ? 0u : 32u)) {
         throw broken("malformed hashes");
     }
     if (prior.has_value() &&
@@ -187,25 +270,60 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
         throw broken("a Space is created once, by its first statement");
     }
 
-    // The recipients after it: each once, each with a role.
-    std::set<std::string> ids;
-    for (const SpaceLogGroup& group : statement.groups) {
-        if (group.groupId.empty() || !isRole(group.role) || !ids.insert(tag("g") + group.groupId).second) {
+    // The deltas, on their own: each id once across its kind's lists, each added entry with a role, and only the
+    // lists its op has.
+    std::set<std::string> groupIds;
+    std::set<std::string> userIds;
+    const auto once = [&](std::set<std::string>& ids, const std::string& id) {
+        if (id.empty() || !ids.insert(id).second) {
+            throw broken("a recipient named twice, or with no id");
+        }
+    };
+    for (const SpaceLogGroup& group : statement.addedGroups) {
+        once(groupIds, group.groupId);
+        if (!isRole(group.role)) {
             throw broken("malformed recipients");
         }
     }
-    for (const SpaceLogUser& user : statement.users) {
-        if (user.userId.empty() || !isRole(user.role) || !ids.insert(tag("u") + user.userId).second) {
+    for (const SpaceLogUser& user : statement.addedUsers) {
+        once(userIds, user.userId);
+        if (!isRole(user.role)) {
             throw broken("malformed recipients");
         }
     }
-    const bool hasManager = std::any_of(
-                                statement.groups.begin(), statement.groups.end(),
-                                [](const auto& g) { return g.role == "manager"; }
-                            ) ||
-        std::any_of(statement.users.begin(), statement.users.end(), [](const auto& u) { return u.role == "manager"; });
-    if (!hasManager) {
-        throw broken("a Space keeps a manager");
+    for (const std::string& id : statement.removedGroups) {
+        once(groupIds, id);
+    }
+    for (const std::string& id : statement.removedUsers) {
+        once(userIds, id);
+    }
+    for (const SpaceLogGroup& group : statement.refreshedGroups) {
+        once(groupIds, group.groupId);
+    }
+    const bool adds = !statement.addedGroups.empty() || !statement.addedUsers.empty();
+    const bool removes = !statement.removedGroups.empty() || !statement.removedUsers.empty();
+    const bool refreshes = !statement.refreshedGroups.empty();
+    switch (statement.op) {
+    case SpaceOp::Create:
+        if (removes || refreshes) {
+            throw broken("a creation only names its recipients");
+        }
+        break;
+    case SpaceOp::Add:
+        if (!adds || removes || refreshes) {
+            throw broken("an addition only adds");
+        }
+        break;
+    case SpaceOp::Remove:
+        if (!removes || adds) {
+            throw broken("a removal only removes");
+        }
+        break;
+    case SpaceOp::Rotate:
+        if (adds || removes) {
+            throw broken("a rotation leaves the recipients as they are");
+        }
+        break;
     }
 
     // The signer's own signature, then their standing: among the recipients BEFORE this statement (a creation has
@@ -218,8 +336,8 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
     if (prior.has_value()) {
         standing = prior.value();
     } else {
-        standing.groups = statement.groups;
-        standing.users = statement.users;
+        standing.groups = statement.addedGroups;
+        standing.users = statement.addedUsers;
     }
     std::string role;
     if (statement.via.empty()) {
@@ -245,11 +363,70 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
         throw GroupUnauthorizedSignerException("space statement: only a manager changes the recipients");
     }
 
-    // What its op lets it change.
-    const auto after = rolesOf(statement.groups, statement.users);
+    // The deltas on the recipients before it.
+    std::vector<SpaceLogGroup> groups = prior.has_value() ? prior->groups : std::vector<SpaceLogGroup>{};
+    std::vector<SpaceLogUser> users = prior.has_value() ? prior->users : std::vector<SpaceLogUser>{};
+    for (const std::string& id : statement.removedGroups) {
+        const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& g) { return g.groupId == id; });
+        if (found == groups.end()) {
+            throw broken("removes group " + id + ", which is no recipient");
+        }
+        groups.erase(found);
+    }
+    for (const std::string& id : statement.removedUsers) {
+        const auto found = std::find_if(users.begin(), users.end(), [&](const auto& u) { return u.userId == id; });
+        if (found == users.end()) {
+            throw broken("removes user " + id + ", who is no recipient");
+        }
+        users.erase(found);
+    }
+    // A group's pinned epoch and key are what "through that group" is checked against from here on, and what the
+    // next key is wrapped to. So they move only forward, and only by a manager - who could replace the group among
+    // the recipients anyway - or by the group itself. Any other recipient could otherwise put a key of their own in
+    // a manager group's place.
+    for (const SpaceLogGroup& refresh : statement.refreshedGroups) {
+        const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& g) {
+            return g.groupId == refresh.groupId;
+        });
+        if (found == groups.end()) {
+            throw broken("refreshes group " + refresh.groupId + ", which is no recipient");
+        }
+        if (refresh.groupKeyVersion <= found->groupKeyVersion || refresh.groupPubKey == found->groupPubKey) {
+            throw broken("a group's key is replaced by a later epoch's only");
+        }
+        if (role != "manager" && statement.via != refresh.groupId) {
+            throw GroupUnauthorizedSignerException(
+                "space statement: the key of group " + refresh.groupId + " is refreshed by a manager or by that group"
+            );
+        }
+        found->groupKeyVersion = refresh.groupKeyVersion;
+        found->groupPubKey = refresh.groupPubKey;
+    }
+    for (const SpaceLogGroup& group : statement.addedGroups) {
+        if (prior.has_value() && prior->group(group.groupId) != nullptr) {
+            throw broken("adds group " + group.groupId + ", which is a recipient already");
+        }
+        groups.push_back(group);
+    }
+    for (const SpaceLogUser& user : statement.addedUsers) {
+        if (prior.has_value() && !prior->roleOfUser(user.userId).empty()) {
+            throw broken("adds user " + user.userId + ", who is a recipient already");
+        }
+        users.push_back(user);
+    }
+    const bool hasManager = std::any_of(
+                                groups.begin(), groups.end(), [](const auto& g) { return g.role == "manager"; }
+                            ) ||
+        std::any_of(users.begin(), users.end(), [](const auto& u) { return u.role == "manager"; });
+    if (!hasManager) {
+        throw broken("a Space keeps a manager");
+    }
+    if (rosterHash(groups, users) != statement.rosterHash) {
+        throw broken("the recipients after it are not the ones its rosterHash names");
+    }
+
     std::map<std::uint64_t, std::string> keyCommits;
     if (prior.has_value()) {
-        const auto before = rolesOf(prior->groups, prior->users);
         keyCommits = prior->keyCommits;
         const bool newKey = statement.op != SpaceOp::Add;
         if (statement.keyVersion != prior->keyVersion + (newKey ? 1 : 0)) {
@@ -257,65 +434,6 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
         }
         if (!newKey && statement.keyCommit != prior->keyCommits.at(prior->keyVersion)) {
             throw broken("an addition keeps the key");
-        }
-        // A group's pinned epoch and key are what "through that group" is checked against from here on, and what
-        // the next key is wrapped to. So they move only forward, and only by a manager - who could replace the
-        // group among the recipients anyway - or by the group itself. Any other recipient could otherwise put a
-        // key of their own in a manager group's place.
-        for (const SpaceLogGroup& group : statement.groups) {
-            const SpaceLogGroup* before = prior->group(group.groupId);
-            if (before == nullptr ||
-                (before->groupPubKey == group.groupPubKey && before->groupKeyVersion == group.groupKeyVersion)) {
-                continue;
-            }
-            if (group.groupKeyVersion <= before->groupKeyVersion || before->groupPubKey == group.groupPubKey) {
-                throw broken("a group's key is replaced by a later epoch's only");
-            }
-            if (role != "manager" && statement.via != group.groupId) {
-                throw GroupUnauthorizedSignerException(
-                    "space statement: the key of group " + group.groupId + " is refreshed by a manager or by that group"
-                );
-            }
-        }
-        switch (statement.op) {
-        case SpaceOp::Add:
-            // Nobody already there is touched - a group's epoch and key included.
-            if (after.size() <= before.size() ||
-                !includes(after, before) ||
-                recipientsHash(prior->groups, prior->users) !=
-                    recipientsHash(
-                        [&] {
-                            std::vector<SpaceLogGroup> kept;
-                            for (const auto& g : statement.groups) {
-                                if (prior->group(g.groupId) != nullptr)
-                                    kept.push_back(g);
-                            }
-                            return kept;
-                        }(),
-                        [&] {
-                            std::vector<SpaceLogUser> kept;
-                            for (const auto& u : statement.users) {
-                                if (!prior->roleOfUser(u.userId).empty())
-                                    kept.push_back(u);
-                            }
-                            return kept;
-                        }()
-                    )) {
-                throw broken("an addition only adds");
-            }
-            break;
-        case SpaceOp::Remove:
-            if (after.size() >= before.size() || !includes(before, after)) {
-                throw broken("a removal only removes");
-            }
-            break;
-        case SpaceOp::Rotate:
-            if (after != before) {
-                throw broken("a rotation leaves the recipients as they are");
-            }
-            break;
-        case SpaceOp::Create:
-            break;
         }
     } else if (statement.keyVersion != 1) {
         throw broken("a Space starts at key version 1");
@@ -329,8 +447,8 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
         .seq = seq,
         .digest = digest(statement),
         .keyVersion = statement.keyVersion,
-        .groups = statement.groups,
-        .users = statement.users,
+        .groups = std::move(groups),
+        .users = std::move(users),
         .keyCommits = std::move(keyCommits),
     };
 }
@@ -476,20 +594,30 @@ server::SpaceStatement SpaceLog::toWire(const SpaceStatement& statement) {
     wire.date = static_cast<std::int64_t>(statement.date);
     wire.keyVersion = static_cast<std::int64_t>(statement.keyVersion);
     wire.keyCommit = privmx::utils::Hex::from(statement.keyCommit);
-    for (const SpaceLogGroup& group : statement.groups) {
+    wire.rosterHash = privmx::utils::Hex::from(statement.rosterHash);
+    for (const SpaceLogGroup& group : statement.addedGroups) {
         server::SpaceGroup entry;
         entry.groupId = group.groupId;
         entry.role = group.role;
         entry.groupKeyVersion = static_cast<std::int64_t>(group.groupKeyVersion);
         entry.groupPubKey = group.groupPubKey;
-        wire.groups.push_back(std::move(entry));
+        wire.addedGroups.push_back(std::move(entry));
     }
-    for (const SpaceLogUser& user : statement.users) {
+    for (const SpaceLogUser& user : statement.addedUsers) {
         server::SpaceUser entry;
         entry.userId = user.userId;
         entry.pubKey = user.pubKey;
         entry.role = user.role;
-        wire.users.push_back(std::move(entry));
+        wire.addedUsers.push_back(std::move(entry));
+    }
+    wire.removedGroups = statement.removedGroups;
+    wire.removedUsers = statement.removedUsers;
+    for (const SpaceLogGroup& group : statement.refreshedGroups) {
+        server::SpaceGroupKey entry;
+        entry.groupId = group.groupId;
+        entry.groupKeyVersion = static_cast<std::int64_t>(group.groupKeyVersion);
+        entry.groupPubKey = group.groupPubKey;
+        wire.refreshedGroups.push_back(std::move(entry));
     }
     wire.signer = statement.signer;
     wire.signerPubKey = statement.signerPubKey;
@@ -519,8 +647,9 @@ SpaceStatement SpaceLog::fromWire(const server::SpaceStatement& wire) {
     statement.date = static_cast<std::uint64_t>(wire.date);
     statement.keyVersion = static_cast<std::uint64_t>(wire.keyVersion);
     statement.keyCommit = privmx::utils::Hex::toString(wire.keyCommit);
-    for (const server::SpaceGroup& group : wire.groups) {
-        statement.groups.push_back(
+    statement.rosterHash = privmx::utils::Hex::toString(wire.rosterHash);
+    for (const server::SpaceGroup& group : wire.addedGroups) {
+        statement.addedGroups.push_back(
             SpaceLogGroup{
                 .groupId = group.groupId,
                 .role = group.role,
@@ -529,8 +658,23 @@ SpaceStatement SpaceLog::fromWire(const server::SpaceStatement& wire) {
             }
         );
     }
-    for (const server::SpaceUser& user : wire.users) {
-        statement.users.push_back(SpaceLogUser{.userId = user.userId, .pubKey = user.pubKey, .role = user.role});
+    for (const server::SpaceUser& user : wire.addedUsers) {
+        statement.addedUsers.push_back(SpaceLogUser{.userId = user.userId, .pubKey = user.pubKey, .role = user.role});
+    }
+    statement.removedGroups = wire.removedGroups;
+    statement.removedUsers = wire.removedUsers;
+    for (const server::SpaceGroupKey& group : wire.refreshedGroups) {
+        if (group.groupKeyVersion < 0) {
+            throw GroupDataIntegrityException("space statement: a negative epoch");
+        }
+        statement.refreshedGroups.push_back(
+            SpaceLogGroup{
+                .groupId = group.groupId,
+                .role = std::string(),
+                .groupKeyVersion = static_cast<std::uint64_t>(group.groupKeyVersion),
+                .groupPubKey = group.groupPubKey,
+            }
+        );
     }
     statement.signer = wire.signer;
     statement.signerPubKey = wire.signerPubKey;

@@ -180,10 +180,10 @@ public:
     // of range.
     static CommitStatement fromWire(const server::GroupTreeCommit& wire);
 
-private:
-    // u32 count, then each value length-prefixed.
+    // u32 count, then each value length-prefixed. Spaces' statements encode their id lists the same way.
     static void putList(std::string& out, const std::vector<std::string>& values);
 
+private:
     static std::vector<std::string> sortedUnique(std::vector<std::string> values);
 
     // Throws std::invalid_argument on anything but 64 lowercase hex digits.

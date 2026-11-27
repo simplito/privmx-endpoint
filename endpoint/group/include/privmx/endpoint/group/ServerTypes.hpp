@@ -399,7 +399,15 @@ JSON_STRUCT(SpaceGroup, SPACE_GROUP_FIELDS);
     F(role, std::string)
 JSON_STRUCT(SpaceUser, SPACE_USER_FIELDS);
 
-// One signed statement of a Space's history. Hashes are hex, signatures base64. See keytree/SpaceLog.hpp.
+// A recipient group's key moved to a later epoch (its role stays).
+#define SPACE_GROUP_KEY_FIELDS(F)                                                                                      \
+    F(groupId, std::string)                                                                                            \
+    F(groupKeyVersion, int64_t)                                                                                        \
+    F(groupPubKey, std::string)
+JSON_STRUCT(SpaceGroupKey, SPACE_GROUP_KEY_FIELDS);
+
+// One signed statement of a Space's history: what changed (deltas) and a hash of the whole roster after it. Hashes
+// are hex, signatures base64. See keytree/SpaceLog.hpp.
 #define SPACE_STATEMENT_FIELDS(F)                                                                                      \
     F(spaceId, std::string)                                                                                            \
     F(contextId, std::string)                                                                                          \
@@ -409,8 +417,12 @@ JSON_STRUCT(SpaceUser, SPACE_USER_FIELDS);
     F(date, int64_t)                                                                                                   \
     F(keyVersion, int64_t)                                                                                             \
     F(keyCommit, std::string)                                                                                          \
-    F(groups, std::vector<SpaceGroup>)                                                                                 \
-    F(users, std::vector<SpaceUser>)                                                                                   \
+    F(rosterHash, std::string)                                                                                         \
+    F(addedGroups, std::vector<SpaceGroup>)                                                                            \
+    F(addedUsers, std::vector<SpaceUser>)                                                                              \
+    F(removedGroups, std::vector<std::string>)                                                                         \
+    F(removedUsers, std::vector<std::string>)                                                                          \
+    F(refreshedGroups, std::vector<SpaceGroupKey>)                                                                     \
     F(signer, std::string)                                                                                             \
     F(signerPubKey, std::string)                                                                                       \
     F(via, std::string)                                                                                                \

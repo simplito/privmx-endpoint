@@ -294,24 +294,19 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
                 statement.prevDigest != state->digest) {
                 throw fork("another statement where this device verified one");
             }
-            const std::optional<keytree::SpaceLogState> before = state;
             state = keytree::SpaceLog::apply(state, statement);
             signers.push_back(core::UserWithPubKey{.userId = statement.signer, .pubKey = statement.signerPubKey});
-            for (const keytree::SpaceLogGroup& group : state->groups) {
-                const keytree::SpaceLogGroup* was = before.has_value() ? before->group(group.groupId) : nullptr;
-                if (was != nullptr &&
-                    (was->groupKeyVersion != group.groupKeyVersion || was->groupPubKey != group.groupPubKey)) {
-                    refreshes.push_back(
-                        GroupKeyRefresh{
-                            .seq = statement.seq,
-                            .groupId = group.groupId,
-                            .groupKeyVersion = group.groupKeyVersion,
-                            .groupPubKey = group.groupPubKey,
-                            // Through this very group: only then did its pinned key sign the refresh.
-                            .byGroup = statement.via == group.groupId,
-                        }
-                    );
-                }
+            for (const keytree::SpaceLogGroup& group : statement.refreshedGroups) {
+                refreshes.push_back(
+                    GroupKeyRefresh{
+                        .seq = statement.seq,
+                        .groupId = group.groupId,
+                        .groupKeyVersion = group.groupKeyVersion,
+                        .groupPubKey = group.groupPubKey,
+                        // Through this very group: only then did its pinned key sign the refresh.
+                        .byGroup = statement.via == group.groupId,
+                    }
+                );
             }
         }
         // The statements name their signers' keys; whether those users hold them is the application's to say. Asked
@@ -497,8 +492,8 @@ keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
     statement.signer = _connection.getImpl()->getMyUserId(statement.contextId);
     const std::string ownPubKey = _userPrivKey.getPublicKey().toBase58DER();
     const bool needManager = statement.op != keytree::SpaceOp::Rotate;
-    const auto& users = prior.has_value() ? prior->users : statement.users;
-    const auto& groups = prior.has_value() ? prior->groups : statement.groups;
+    const auto& users = prior.has_value() ? prior->users : statement.addedUsers;
+    const auto& groups = prior.has_value() ? prior->groups : statement.addedGroups;
     // Each standing the caller has is tried until the statement is one that may follow: a group's key, for one,
     // is refreshed by a manager or through that very group, so the first standing found is not always the one.
     std::optional<GroupUnauthorizedSignerException> refused;
@@ -573,24 +568,24 @@ core::PagingList<SpaceLogEntry> GroupApiImpl::getSpaceLog(
             .addedUsers = {},
             .removedGroups = {},
             .removedUsers = {},
+            .refreshedGroups = {},
         };
-        for (const auto& group : next.groups) {
-            if (!state.has_value() || state->group(group.groupId) == nullptr)
-                entry.addedGroups.push_back(group.groupId);
+        for (const auto& group : statement.addedGroups) {
+            entry.addedGroups.push_back(group.groupId);
         }
-        for (const auto& user : next.users) {
-            if (!state.has_value() || state->roleOfUser(user.userId).empty())
-                entry.addedUsers.push_back(user.userId);
+        for (const auto& user : statement.addedUsers) {
+            entry.addedUsers.push_back(user.userId);
         }
-        if (state.has_value()) {
-            for (const auto& group : state->groups) {
-                if (next.group(group.groupId) == nullptr)
-                    entry.removedGroups.push_back(group.groupId);
-            }
-            for (const auto& user : state->users) {
-                if (next.roleOfUser(user.userId).empty())
-                    entry.removedUsers.push_back(user.userId);
-            }
+        entry.removedGroups = statement.removedGroups;
+        entry.removedUsers = statement.removedUsers;
+        for (const auto& group : statement.refreshedGroups) {
+            entry.refreshedGroups.push_back(
+                SpaceGroupRecipient{
+                    .groupId = group.groupId,
+                    .role = next.group(group.groupId)->role,
+                    .keyVersion = static_cast<int64_t>(group.groupKeyVersion),
+                }
+            );
         }
         entries.push_back(std::move(entry));
         state = next;
@@ -982,7 +977,7 @@ std::vector<group::server::SpaceKeyEntry> GroupApiImpl::wrapSpaceKeyFor(
 
 // -- the Space itself ------------------------------------------------------------------------------------
 
-// The new recipients of a statement: who the caller named, each group at the epoch and key its wrap was made for.
+// The recipients a statement adds: who the caller named, each group at the epoch and key its wrap was made for.
 void GroupApiImpl::appendRecipients(
     keytree::SpaceStatement& statement,
     const std::vector<SpaceRecipient>& recipients,
@@ -990,7 +985,7 @@ void GroupApiImpl::appendRecipients(
 ) {
     for (const SpaceRecipient& recipient : recipients) {
         if (recipient.user.has_value()) {
-            statement.users.push_back(
+            statement.addedUsers.push_back(
                 keytree::SpaceLogUser{
                     .userId = recipient.user->userId, .pubKey = recipient.user->pubKey, .role = recipient.role
                 }
@@ -1000,7 +995,7 @@ void GroupApiImpl::appendRecipients(
         const auto target = std::find_if(targets.begin(), targets.end(), [&](const SpaceTarget& t) {
             return t.isGroup && t.id == recipient.groupId;
         });
-        statement.groups.push_back(
+        statement.addedGroups.push_back(
             keytree::SpaceLogGroup{
                 .groupId = recipient.groupId,
                 .role = recipient.role,
@@ -1057,6 +1052,7 @@ std::string GroupApiImpl::createSpace(
     statement.keyVersion = 1;
     statement.keyCommit = keytree::SpaceLog::keyCommit(spaceId, 1, spaceKey);
     appendRecipients(statement, recipients, targets);
+    statement.rosterHash = keytree::SpaceLog::rosterHash(statement.addedGroups, statement.addedUsers);
     statement = signSpaceStatement(std::move(statement), std::nullopt);
     const keytree::SpaceLogState created = keytree::SpaceLog::apply(std::nullopt, statement);
     model.statement = keytree::SpaceLog::toWire(statement);
@@ -1232,9 +1228,12 @@ void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vec
     statement.op = keytree::SpaceOp::Add;
     statement.keyVersion = prior.value().keyVersion;
     statement.keyCommit = prior->keyCommits.at(prior->keyVersion);
-    statement.groups = prior->groups;
-    statement.users = prior->users;
     appendRecipients(statement, recipients, targets);
+    std::vector<keytree::SpaceLogGroup> rosterGroups = prior->groups;
+    std::vector<keytree::SpaceLogUser> rosterUsers = prior->users;
+    rosterGroups.insert(rosterGroups.end(), statement.addedGroups.begin(), statement.addedGroups.end());
+    rosterUsers.insert(rosterUsers.end(), statement.addedUsers.begin(), statement.addedUsers.end());
+    statement.rosterHash = keytree::SpaceLog::rosterHash(rosterGroups, rosterUsers);
     statement = signSpaceStatement(std::move(statement), prior);
     const keytree::SpaceLogState added = keytree::SpaceLog::apply(prior, statement);
     model.statement = keytree::SpaceLog::toWire(statement);
@@ -1314,12 +1313,13 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     statement.op = withoutGroups.empty() && withoutUsers.empty() ? keytree::SpaceOp::Rotate : keytree::SpaceOp::Remove;
     statement.keyVersion = static_cast<std::uint64_t>(next);
     statement.keyCommit = keytree::SpaceLog::keyCommit(spaceId, static_cast<std::uint64_t>(next), spaceKey);
+    std::vector<keytree::SpaceLogGroup> staying;
     for (const keytree::SpaceLogGroup& group : prior.value().groups) {
         const auto target = std::find_if(targets.begin(), targets.end(), [&](const SpaceTarget& t) {
             return t.isGroup && t.id == group.groupId;
         });
         if (target != targets.end()) {
-            statement.groups.push_back(
+            staying.push_back(
                 keytree::SpaceLogGroup{
                     .groupId = group.groupId,
                     .role = group.role,
@@ -1329,11 +1329,14 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
             );
         }
     }
+    std::vector<keytree::SpaceLogUser> stayingUsers;
     for (const keytree::SpaceLogUser& user : prior->users) {
         if (!dropped(withoutUsers, user.userId)) {
-            statement.users.push_back(user);
+            stayingUsers.push_back(user);
         }
     }
+    // As deltas on the verified state: the removed, and each staying group whose epoch moved since.
+    keytree::SpaceLog::setRoster(statement, prior, staying, stayingUsers);
     try {
         statement = signSpaceStatement(std::move(statement), prior);
     } catch (const GroupUnauthorizedSignerException& e) {

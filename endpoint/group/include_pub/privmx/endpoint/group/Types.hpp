@@ -695,10 +695,16 @@ struct SpaceLogEntry {
     int64_t date;
     /** The version of the Space's key after it. */
     int64_t keyVersion;
+    /**
+     * What it changed: a statement carries only these deltas (and a hash of the whole roster after it), never the
+     * full list of recipients. Added and removed recipients by ID; a creation adds every first recipient.
+     */
     std::vector<std::string> addedGroups;
     std::vector<std::string> addedUsers;
     std::vector<std::string> removedGroups;
     std::vector<std::string> removedUsers;
+    /** Recipient Groups whose key moved to a later epoch (a member removed from the Group since): the epoch now. */
+    std::vector<SpaceGroupRecipient> refreshedGroups;
 };
 
 struct DecryptedSpaceEnvelope {

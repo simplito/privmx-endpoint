@@ -186,13 +186,50 @@ struct Bridge {
         }));
     }
 
-    // The new state of a stored Space after a statement: its recipients, version and position.
+    // The new state of a stored Space after a statement: its deltas applied to the stored recipients, which must
+    // hash to the statement's rosterHash (as the Bridge refuses SPACE_STATEMENT_INVALID), its version and position.
     static void applyStatement(StoredSpace& space, const server::SpaceStatement& statement, const std::string& caller) {
+        auto groups = space.info.groups;
+        auto users = space.info.users;
+        for (const auto& id : statement.removedGroups) {
+            groups.erase(
+                std::remove_if(groups.begin(), groups.end(), [&](const auto& g) { return g.groupId == id; }), groups.end()
+            );
+        }
+        for (const auto& id : statement.removedUsers) {
+            users.erase(std::remove_if(users.begin(), users.end(), [&](const auto& u) { return u.userId == id; }), users.end());
+        }
+        for (const auto& refresh : statement.refreshedGroups) {
+            for (auto& g : groups) {
+                if (g.groupId == refresh.groupId) {
+                    g.groupKeyVersion = refresh.groupKeyVersion;
+                    g.groupPubKey = refresh.groupPubKey;
+                }
+            }
+        }
+        groups.insert(groups.end(), statement.addedGroups.begin(), statement.addedGroups.end());
+        users.insert(users.end(), statement.addedUsers.begin(), statement.addedUsers.end());
+        std::vector<SpaceLogGroup> rosterGroups;
+        for (const auto& g : groups) {
+            rosterGroups.push_back(SpaceLogGroup{
+                .groupId = g.groupId,
+                .role = g.role,
+                .groupKeyVersion = static_cast<std::uint64_t>(g.groupKeyVersion),
+                .groupPubKey = g.groupPubKey.value_or(""),
+            });
+        }
+        std::vector<SpaceLogUser> rosterUsers;
+        for (const auto& u : users) {
+            rosterUsers.push_back(SpaceLogUser{.userId = u.userId, .pubKey = u.pubKey, .role = u.role});
+        }
+        if (privmx::utils::Hex::from(SpaceLog::rosterHash(rosterGroups, rosterUsers)) != statement.rosterHash) {
+            throw std::runtime_error("SPACE_STATEMENT_INVALID");
+        }
         space.statements.push_back(statement);
         space.info.seq = statement.seq;
         space.info.keyVersion = statement.keyVersion;
-        space.info.groups = statement.groups;
-        space.info.users = statement.users;
+        space.info.groups = groups;
+        space.info.users = users;
         space.info.lastModifier = caller;
     }
 
@@ -5616,6 +5653,33 @@ TEST_F(GroupApiLyingBridgeSpaces, ANewSessionVerifiesOnlyTheStatementsSinceTheSt
     bridge.spaces.at(spaceId).info.keyVersion = 4;
     bridge.spaces.at(spaceId).info.seq = 3;
     EXPECT_THROW(sibling("bob").getSpace(spaceId), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AStatementCarriesItsChangesNotTheRoster) {
+    quiet = true;
+    std::vector<SpaceRecipient> recipients{person("alice", "manager")};
+    for (int i = 0; i < 30; ++i) {
+        const std::string id = "member" + std::to_string(i);
+        addUsers({id});
+        recipients.push_back(person(id, "user"));
+    }
+    const std::string spaceId = client("alice").createSpace(
+        CONTEXT, recipients, core::Buffer::from("pub"), core::Buffer::from("priv"), std::nullopt
+    );
+    client("alice").rotateSpaceKey(spaceId);
+    client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "member7"}});
+    const auto& statements = bridge.spaces.at(spaceId).statements;
+    ASSERT_EQ(statements.size(), 3u);
+    const auto size = [](const server::SpaceStatement& s) { return privmx::utils::Utils::stringifyVar(s.toJSON()).size(); };
+    EXPECT_EQ(statements[0].addedUsers.size(), 31u) << "a creation names everyone";
+    EXPECT_TRUE(statements[1].addedUsers.empty() && statements[1].removedUsers.empty());
+    EXPECT_EQ(statements[2].removedUsers, std::vector<std::string>{"member7"});
+    EXPECT_LT(size(statements[1]), 1200u) << "a rotation of 31 recipients";
+    EXPECT_LT(size(statements[2]), 1200u);
+    EXPECT_GT(size(statements[0]), 3000u);
+    // Read by a fresh session: the roster is what the deltas add up to.
+    const SpaceState read = sibling("member3").getSpace(spaceId);
+    EXPECT_EQ(read.users.size(), 30u);
 }
 
 TEST_F(GroupApiLyingBridgeSpaces, AStoredStateOfTheEarlierBlobVersionIsAFirstContact) {
