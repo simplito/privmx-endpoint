@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
@@ -124,7 +123,8 @@ std::string InboxEntryDataEncryptorV1::encrypt(
 InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(std::string& serializedBase64, core::PrivateKey& inboxPriv) {
     InboxEntryDataResult result;
     try {
-        result.statusCode = 0;
+        // `readFrame` does the buffer walk that used to be spelled out here, and `core::Ecies`
+        // replaces `crypto::EciesEncryptor` — the ECIES wrap moved with the rest of the key types.
         const EntryFrame frame = readFrame(utils::Base64::toString(serializedBase64));
         InboxEntryPublicData publicData = frame.publicData;
         auto decrypted = core::Ecies::decrypt(inboxPriv, frame.eciesWrap);
@@ -138,26 +138,23 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(std::string& serializedB
 
         result.privateData = privateData;
         result.publicData = publicData;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking the inbox entry");
+    }
     return result;
 }
 
 InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::string& serializedBase64) {
     InboxEntryPublicDataResult result;
     try {
-        result.statusCode = 0;
         const EntryFrame frame = readFrame(utils::Base64::toString(serializedBase64));
         result.userPubKey = frame.publicData.userPubKey;
         result.keyPreset = frame.publicData.keyPreset;
         result.usedInboxKeyId = frame.publicData.usedInboxKeyId;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        // The PrivmxException branch is gone with ExceptionConverter: everything that reaches here
+        // is already a core::Exception, and anything else is reported as an unknown error.
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking the inbox entry");
+    }
     return result;
 }

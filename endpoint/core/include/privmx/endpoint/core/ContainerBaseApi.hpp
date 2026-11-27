@@ -34,7 +34,6 @@ limitations under the License.
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
@@ -252,7 +251,8 @@ protected:
             // written with. Empty when the policy names none, and then the key's own suite stands —
             // see `suiteOfExisting`. It must not become the build's default here: that would move an
             // existing container to whatever algorithm the writing client happens to prefer.
-            .cryptoSuite = suiteNamedByPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy))
+            .cryptoSuite = suiteNamedByPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy)),
+            .forwardSecrecyEnforced = isForwardSecrecyEnforced(container.policy)
         };
     }
 
@@ -298,6 +298,11 @@ protected:
         const std::string& resourceId,
         const std::string& containerSecret
     );
+
+    // Whether a stale key is a reason to *refuse* a write. A container whose policy reads `forwardSecrecy: "no"`
+    // opted out and the bridge accepts the write, so nothing here may stop it. Re-keying is a separate question:
+    // `isRekeyNeeded` stays true either way, because moving off a superseded epoch is worth doing unasked.
+    static bool isForwardSecrecyEnforced(const Poco::Dynamic::Var& policy);
 
     // Stale: a group the server lists in `staleGroups`, or one `groupsBehindPins` finds — the server's list alone
     // would let it keep a removed member reading new content. Or a current key behind an unsigned (V1) entry, which

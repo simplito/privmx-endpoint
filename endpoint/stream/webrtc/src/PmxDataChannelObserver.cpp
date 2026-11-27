@@ -69,10 +69,6 @@ void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool bina
             _onTrackInterface->OnData(data);
         } catch (const privmx::endpoint::core::Exception& e) {
             LOG_ERROR("PmxDataChannelObserver::OnMessage recived privmx::endpoint::core::Exception\n", e.getFull())
-        } catch (const privmx::utils::PrivmxException& e) {
-            LOG_ERROR(
-                "PmxDataChannelObserver::OnMessage recived privmx::utils::PrivmxException\n", e.what(), " ", e.getCode()
-            )
         } catch (...) { LOG_ERROR("PmxDataChannelObserver::OnMessage recived unknown exception") }
     }
 }

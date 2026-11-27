@@ -15,7 +15,7 @@ limitations under the License.
 #include <random>
 #include <vector>
 
-#include <privmx/utils/PrivmxException.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
 
 #include "privmx/endpoint/group/CommitEngine.hpp"
 #include "privmx/endpoint/group/GroupKeys.hpp"
@@ -195,7 +195,7 @@ void DeferredWork::checkLadderAt(const std::string& groupId, const std::string& 
                 server::GroupRepairRungModel{.id = groupId, .rung = keytree::TreeWire::toWire(rung)}
             );
             LOG_INFO("[ladder] repaired rung ", std::to_string(span.at) + "->" + std::to_string(span.target))
-        } catch (const privmx::utils::PrivmxException& e) {
+        } catch (const privmx::endpoint::core::Exception& e) {
             // SPAN_FULL, AUTHOR_HAS_RUNG, ROTATED_ALREADY, the budget: not retried; the next trigger re-checks.
             LOG_WARN("[ladder] repair refused: ", e.what())
         }
@@ -238,7 +238,7 @@ void DeferredWork::run(const std::string& groupId, const std::function<void()>& 
             selfUpdate();
         } catch (const StalePlan&) {
             lostRace = true; // planned behind a commit of this client's own; re-plan like a lost race
-        } catch (const privmx::utils::PrivmxException& e) {
+        } catch (const privmx::endpoint::core::Exception& e) {
             lostRace = CommitEngine::isRetryableCommitRejection(e);
             if (!lostRace) {
                 LOG_WARN("[selfUpdate] group key tree self-update dropped: ", e.what())

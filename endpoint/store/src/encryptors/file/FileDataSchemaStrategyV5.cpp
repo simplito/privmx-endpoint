@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/store/Constants.hpp"
@@ -34,17 +33,7 @@ DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
         return decrypt(file, encKey);
     } catch (const core::Exception& e) {
         return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = e.getCode()},
-             {},
-             {},
-             {},
-             {},
-             {}}
-        );
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5,
-              .statusCode = core::ExceptionConverter::convert(e).getCode()},
+            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .error = core::asError(e)},
              {},
              {},
              {},
@@ -53,7 +42,8 @@ DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
         );
     } catch (...) {
         return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},
+            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5,
+              .error = core::unknownError("decrypting file meta")},
              {},
              {},
              {},
@@ -69,7 +59,7 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
 ) const {
     int64_t size = 0;
     bool randomWrite = false;
-    auto statusCode = raw.statusCode;
+    auto statusCode = raw.statusCode();
     if (statusCode == 0) {
         try {
             auto internalMeta = dynamic::InternalStoreFileMeta::fromJSON(
@@ -77,11 +67,9 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
             );
             size = internalMeta.size;
             randomWrite = internalMeta.randomWrite.value_or(false);
-        } catch (const core::Exception& e) {
-            statusCode = e.getCode();
-        } catch (const privmx::utils::PrivmxException& e) {
-            statusCode = core::ExceptionConverter::convert(e).getCode();
-        } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        } catch (const core::Exception& e) { statusCode = e.getCode(); } catch (...) {
+            statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
     }
     return {
         FileMetaDataSchemaMapper::toLibFile(

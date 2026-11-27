@@ -14,7 +14,6 @@ limitations under the License.
 #include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/group/GroupAwareModuleApi.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
@@ -47,29 +46,33 @@ GroupAwareModuleApi::GroupAwareModuleApi(
 
 GroupAwareModuleApi::~GroupAwareModuleApi() = default;
 
-void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, const privmx::utils::PrivmxException& e) {
-    auto code = core::ExceptionConverter::convert(e).getCode();
+void GroupAwareModuleApi::absorbAutoRekeyFailure(
+    const std::string& moduleId,
+    const privmx::endpoint::core::Exception& e,
+    bool forwardSecrecyEnforced
+) {
+    auto code = e.getCode();
     if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
         invalidateModuleKeysInCache(moduleId);
         return;
     }
-    if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
-        throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
+    if (!forwardSecrecyEnforced) {
+        return; // the container stays on the old epoch, and the write that follows is allowed to use it
     }
-    core::ExceptionConverter::rethrowAsCoreException(e);
-    throw core::Exception("ExceptionConverter rethrow error");
+    if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
+        throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied", e);
+    }
+    e.rethrow();
 }
 
 void GroupAwareModuleApi::runRequiringCurrentKey(const std::string& moduleId, const std::function<void()>& operation) {
     try {
         operation();
-    } catch (const privmx::utils::PrivmxException& e) {
-        auto code = core::ExceptionConverter::convert(e).getCode();
-        if (code == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
-            throw core::StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager");
+    } catch (const privmx::endpoint::core::Exception& e) {
+        if (e.getCode() == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
+            throw core::StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager", e);
         }
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+        throw;
     }
 }
 

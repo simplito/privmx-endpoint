@@ -213,7 +213,7 @@ TEST_F(ContextEventBinding, SECURITY_AnEventIsVerifiedUnderTheAuthorTheApplicati
     const auto delivered = mapper->decrypt(relabelled);
     EXPECT_EQ(delivered.userId, "bob");
     EXPECT_EQ(delivered.statusCode, REFUSED);
-    EXPECT_EQ(mapper->decryptInternal(relabelled).statusCode, REFUSED);
+    EXPECT_EQ(mapper->decryptInternal(relabelled).statusCode(), REFUSED);
     for (const auto& request : verifier->asked) {
         EXPECT_NE(request.senderId, "carol") << "asked about another identity than the one delivered";
     }
@@ -233,7 +233,7 @@ TEST_F(ContextEventBinding, SECURITY_AnEventIsVerifiedUnderTheContextTheApplicat
     const auto delivered = mapper->decrypt(relabelled);
     EXPECT_EQ(delivered.contextId, "ctx-a");
     EXPECT_EQ(delivered.statusCode, REFUSED);
-    EXPECT_EQ(mapper->decryptInternal(relabelled).statusCode, REFUSED);
+    EXPECT_EQ(mapper->decryptInternal(relabelled).statusCode(), REFUSED);
     EXPECT_TRUE(verifier->asked.empty());
 }
 

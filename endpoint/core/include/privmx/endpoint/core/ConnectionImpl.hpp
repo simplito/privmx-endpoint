@@ -150,6 +150,9 @@ private:
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     NotificationEvent convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
+    void emitLibConnectionStateChangeUnlocked(bool connected);
+    void emitLibConnectionStateChange(bool connected);
+    void emitLibConnectionStateFromGateway();
 
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
@@ -171,9 +174,14 @@ private:
     std::shared_ptr<SubscriberImpl> _subscriber;
     std::optional<ServerApi> _serverApi;
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
-    int _gatewayNotificationEventListener, _gatewayConnectedEventListener, _gatewayDisconnectedEventListener,
-        _gatewaySessionLostEventListener;
-    int _notificationListenerId;
+    // -1 is never handed out as a listener id, so an unregistered listener removes nothing.
+    int _gatewayNotificationEventListener = -1, _gatewayConnectedEventListener = -1,
+        _gatewayDisconnectedEventListener = -1, _gatewaySessionLostEventListener = -1;
+    int _notificationListenerId = -1;
+    // libConnected and libDisconnected report transitions, so each is emitted once per flip of this.
+    bool _connectedEventEmitted = false;
+    // Also held while the gateway state is read, so an event cannot overtake that read.
+    std::mutex _connectedEventMutex;
 };
 
 } // namespace core

@@ -1,6 +1,5 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
 #include <Poco/UUIDGenerator.h>

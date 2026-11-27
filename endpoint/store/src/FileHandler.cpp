@@ -249,9 +249,6 @@ void FileHandler::flush() {
         } catch (const core::Exception& e) {
             _hashList->setAll(savedHashList);
             e.rethrow();
-        } catch (const privmx::utils::PrivmxException& e) {
-            _hashList->setAll(savedHashList);
-            e.rethrow();
         }
 
         for (size_t k = 0; k < batch.size(); k++) {

@@ -30,6 +30,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <privmx/crypto/CryptoException.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
@@ -41,7 +42,8 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 namespace cs = privmx::cryptoservice;
-namespace epcrypto = privmx::endpoint::crypto;
+// privmx::crypto, not privmx::endpoint::crypto: the exception scope moved into the crypto library.
+namespace epcrypto = privmx::crypto;
 
 namespace {
 

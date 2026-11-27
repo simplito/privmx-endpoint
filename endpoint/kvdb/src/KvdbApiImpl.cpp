@@ -14,7 +14,6 @@ limitations under the License.
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
@@ -231,9 +230,8 @@ bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
     try {
         server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
         _serverApi.kvdbEntryGet(model);
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-            privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
+    } catch (const privmx::endpoint::core::Exception& e) {
+        if (e.getCode() == privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
             return false;
         }
         e.rethrow();
@@ -297,10 +295,8 @@ void KvdbApiImpl::setEntryRequest(
     const core::ModuleKeys& keys
 ) {
     auto msgKey = getAndValidateModuleCurrentEncKey(keys);
-    if (msgKey.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
-        );
+    if (msgKey.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *msgKey.error);
     }
     server::KvdbEntrySetModel send_entry_model;
     send_entry_model.kvdbId = kvdbId;

@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <privmx/crypto/CryptoException.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
@@ -23,7 +24,9 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-namespace epcrypto = privmx::endpoint::crypto;
+// The crypto exception scope lives in the crypto library now, not under endpoint/. The alias keeps
+// its name so the expectations below read unchanged.
+namespace epcrypto = privmx::crypto;
 
 namespace {
 

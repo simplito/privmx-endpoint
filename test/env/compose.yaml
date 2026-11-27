@@ -129,7 +129,12 @@ services:
       - /data/db
     healthcheck:
       test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'test_mongodb:27017'}]}) }" | mongosh --port 27017 --quiet
-      start_period: 10s
+      # The probe is what initiates the replica set, so it has to keep retrying on a cold CI runner
+      # where mongod needs more than start_period to accept connections.
+      interval: 2s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
       start_interval: 1s
     networks:
       - endpoint_e2e_testing_network

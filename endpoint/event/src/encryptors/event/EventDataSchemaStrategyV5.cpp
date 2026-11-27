@@ -32,7 +32,7 @@ ContextCustomEventData EventDataSchemaStrategyV5::convert(
     const server::ContextCustomEventData& model,
     const DecryptedEventDataV5& raw
 ) const {
-    return toContextCustomEventData(model, raw.data, raw.statusCode, EventDataSchema::Version::VERSION_5);
+    return toContextCustomEventData(model, raw.data, raw.statusCode(), EventDataSchema::Version::VERSION_5);
 }
 
 ContextCustomEventData EventDataSchemaStrategyV5::makeErrorResult(

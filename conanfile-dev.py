@@ -10,11 +10,56 @@ class PrivmxEndpointDevRecipe(ConanFile):
     license = "PrivMX Free License"
 
     settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False], "fPIC": [True, False], "private_headers": [True, False], "with_webrtc": [True, False]}
-    default_options = {"shared": True, "fPIC": False, "private_headers": False, "with_webrtc": True}
+    options = {
+        "shared": [True, False],
+        "fPIC": [True, False],
+        "private_headers": [True, False],
+        "with_webrtc": [True, False],
+        "with_cli": [True, False],
+        "with_tests": [True, False],
+    }
+    default_options = {
+        "shared": True,
+        "fPIC": False,
+        "private_headers": False,
+        "with_webrtc": False,
+        "with_cli": False,
+        "with_tests": True,
+        "*:shared": True,
+        "pson/*:fPIC": False,
+        "sqlite3/*:enable_fts5": True,
+        "poco/*:enable_jwt": False,
+        "poco/*:enable_net": True,
+        "poco/*:enable_pdf": False,
+        "poco/*:enable_xml": True,
+        "poco/*:enable_zip": False,
+        "poco/*:enable_data": False,
+        "poco/*:enable_fork": True,
+        "poco/*:enable_json": True,
+        "poco/*:enable_util": True,
+        "poco/*:enable_redis": False,
+        "poco/*:enable_crypto": True,
+        "poco/*:enable_netssl": True,
+        "poco/*:enable_mongodb": False,
+        "poco/*:enable_pocodoc": False,
+        "poco/*:enable_sevenzip": False,
+        "poco/*:with_sql_parser": False,
+        "poco/*:enable_cppparser": False,
+        "poco/*:enable_data_odbc": False,
+        "poco/*:enable_encodings": True,
+        "poco/*:enable_data_mysql": False,
+        "poco/*:enable_prometheus": False,
+        "poco/*:enable_data_sqlite": False,
+        "poco/*:enable_activerecord": False,
+        "poco/*:enable_pagecompiler": False,
+        "poco/*:enable_apacheconnector": False,
+        "poco/*:enable_data_postgresql": False,
+        "poco/*:enable_activerecord_compiler": False,
+        "poco/*:enable_pagecompiler_file2page": False,
+    }
 
-    # Test recipe for local development checkout. Put this file in the root of
-    # the Endpoint repository so Conan builds from local sources instead of GitHub.
+    # Development recipe for a local checkout: the single entry point for local
+    # and CI builds (conan install conanfile-dev.py -o with_webrtc=True ...).
     exports_sources = (
         "CMakeLists.txt",
         "LICENSE.md",
@@ -26,51 +71,34 @@ class PrivmxEndpointDevRecipe(ConanFile):
     )
 
     def requirements(self):
-        self.requires("privmxdrvnet/1.0.3")
-        self.requires("gmp/6.3.0")
-        # transitive_headers because core's public headers (crypto/PrivateKey.hpp and relatives, and
-        # endpoint/crypto's ExtKey.hpp) include privmx/cryptoservice/*, so a consumer of the Endpoint
-        # needs pmx-crypto's include paths too — the same reason it is PUBLIC on the CMake target.
+        # private headers #include the dependencies' headers, so consumers must see them
+        headers = bool(self.options.private_headers)
+        # privmxdrvcrypto and privmxdrvecc are gone: all cryptography goes through pmx-crypto, which
+        # is a Conan package rather than the git submodule it used to be. pmx-crypto's headers reach
+        # a consumer's compiler unconditionally — core's public headers (crypto/PrivateKey.hpp and
+        # relatives) and endpoint/crypto's ExtKey.hpp include privmx/cryptoservice/*, so this one is
+        # not gated on `private_headers` the way the rest are.
         self.requires("pmx-crypto/0.1", transitive_headers=True)
+        self.requires("privmxdrvnet/1.0.3", transitive_headers=headers)
+        self.requires("gmp/6.3.0", transitive_headers=headers)
+        # Widened from the old >=3.0 <3.1: that pin existed because privmxdrvcrypto was built against
+        # OpenSSL 1.x-era APIs and forced the whole graph down with it. With the drivers gone, the
+        # range is pmx-crypto's own.
+        self.requires("openssl/[>=3.5.9 <3.6]")
+        self.requires("poco/1.13.2", transitive_headers=headers)
+        self.requires("pson/1.0.7", transitive_headers=headers)
+        self.requires("sqlite3/[^3.50.4]", transitive_headers=headers)
         if self.options.with_webrtc:
-            self.requires("libwebrtc/m125.1.0")
-        self.requires("poco/1.13.2")
-        self.requires("pson/1.0.7")
-        self.requires("sqlite3/3.50.4")
+            # consumers implementing WebRTCInterface call libwebrtc symbols directly
+            self.requires("libwebrtc/m125.1.0", transitive_headers=headers, transitive_libs=headers)
+        if self.options.with_cli:
+            self.requires("readline/[^8.2.0]")
+        if self.options.with_tests:
+            self.requires("gtest/[^1.15.0]")
 
     def config_options(self):
         if self.settings.os == "Windows":
             self.options.rm_safe("fPIC")
-        self.options["poco/*"].shared = True
-        self.options["poco/*"].enable_jwt = False
-        self.options["poco/*"].enable_net = True
-        self.options["poco/*"].enable_pdf = False
-        self.options["poco/*"].enable_xml = False
-        self.options["poco/*"].enable_zip = False
-        self.options["poco/*"].enable_data = False
-        self.options["poco/*"].enable_fork = True
-        self.options["poco/*"].enable_json = True
-        self.options["poco/*"].enable_util = True
-        self.options["poco/*"].enable_redis = False
-        self.options["poco/*"].enable_crypto = True
-        self.options["poco/*"].enable_netssl = True
-        self.options["poco/*"].enable_mongodb = False
-        self.options["poco/*"].enable_pocodoc = False
-        self.options["poco/*"].enable_sevenzip = False
-        self.options["poco/*"].with_sql_parser = False
-        self.options["poco/*"].enable_cppparser = False
-        self.options["poco/*"].enable_data_odbc = False
-        self.options["poco/*"].enable_encodings = True
-        self.options["poco/*"].enable_data_mysql = False
-        self.options["poco/*"].enable_prometheus = False
-        self.options["poco/*"].enable_data_sqlite = False
-        self.options["poco/*"].enable_activerecord = False
-        self.options["poco/*"].enable_pagecompiler = False
-        self.options["poco/*"].enable_apacheconnector = False
-        self.options["poco/*"].enable_data_postgresql = False
-        self.options["poco/*"].enable_activerecord_compiler = False
-        self.options["poco/*"].enable_pagecompiler_file2page = False
-        self.options["sqlite3/*"].enable_fts5 = True
 
     def configure(self):
         if self.options.shared:
@@ -87,10 +115,13 @@ class PrivmxEndpointDevRecipe(ConanFile):
         tc = CMakeToolchain(self)
         tc.variables["PRIVMX_CONAN"] = True
         tc.variables["PRIVMX_BUILD_ENDPOINT"] = True
-        tc.variables["PRIVMX_DRIVER_CRYPTO"] = True
+        # No PRIVMX_DRIVER_CRYPTO: the option no longer exists in CMakeLists.txt, because there is
+        # no crypto driver left to switch on.
         tc.variables["PRIVMX_DRIVER_NET"] = True
         tc.variables["PRIVMX_BUILD_WITH_WEBRTC"] = bool(self.options.with_webrtc)
         tc.variables["USE_PREBUILT_WEBRTC"] = bool(self.options.with_webrtc)
+        tc.variables["PRIVMX_BUILD_CLI"] = bool(self.options.with_cli)
+        tc.variables["PRIVMX_ENABLE_TESTS"] = bool(self.options.with_tests)
         tc.variables["PRIVMX_INSTALL_PRIVATE_HEADERS"] = bool(self.options.private_headers)
         tc.generate()
 
@@ -125,6 +156,7 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "pson::Pson",
             "poco::poco",
             "privmxdrvnet::privmxdrvnet",
+            # core links privmxcryptolib PUBLIC: its public headers expose pmx-crypto types.
             "pmx-crypto::pmx-crypto",
         ]
 
@@ -215,7 +247,7 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "pson::Pson",
             "poco::poco",
             "privmxdrvnet::privmxdrvnet",
-            "sqlite3::SQLite3",
+            "sqlite3::sqlite",
         ]
 
         self.cpp_info.components["privmxendpointlock"].libs = ["privmxendpointlock"]

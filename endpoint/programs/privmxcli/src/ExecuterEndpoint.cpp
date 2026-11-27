@@ -46,7 +46,7 @@ ExecuterEndpoint::ExecuterEndpoint(std::thread::id main_thread_id, std::shared_p
     _endpoint = std::make_shared<ApiVar>(serializer, event, connection, backendRequester, utils, crypto, extKey, thread, store, inbox, kvdb, group, eventApi);
 
 }
-bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {
+bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st, const std::string& result_var) {
     std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
     const std::string fun_name = st[0];
     auto it = functions_endpoint_execute.find(fun_code);
@@ -80,21 +80,11 @@ bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {
             Poco::Dynamic::Var value;
             value = exec(_endpoint, args);
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            std::string output = "null";
-            if(!value.isEmpty()) {
-                output = privmx::utils::Utils::stringifyVar(value, true);
-            }
+            std::string result_string = varToSessionString(value);
+            setResultVar(result_var, result_string);
+            // quiet mode keeps every result on a single line so it composes in a shell
+            std::string output = (_config->quiet || value.isEmpty()) ? result_string : privmx::utils::Utils::stringifyVar(value, true);
             _console_writer->print_result(Status::Success, time, output, this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
-        } catch (const privmx::utils::PrivmxException& e) {
-            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            std::ostringstream ss;
-            ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << e.getCode();
-            result->set("Error", e.what());
-            result->set("ErrorCodeHex", ss.str());
-            result->set("ErrorCode", e.getCode());
-            result->set("ErrorData", e.getData());
-            result->set("ErrorType", "privmx::utils::PrivmxException");
-            _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const core::Exception& e) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             std::ostringstream ss;
@@ -104,6 +94,7 @@ bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {
             result->set("ErrorScope", e.getScope());
             result->set("ErrorCodeHex", ss.str());
             result->set("ErrorCode", e.getCode());
+            result->set("ErrorData", e.getData());
             result->set("ErrorDescription", e.getDescription());
             result->set("ErrorType", "core::Exception");
             _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
@@ -159,9 +150,5 @@ std::string ExecuterEndpoint::get_all_function_help_printable_string() {
 }
 
 Poco::Dynamic::Var ExecuterEndpoint::getS_var(const string &key){
-    auto it = session.find(key);
-    if(it == session.end()){
-        return Poco::Dynamic::Var(key);
-    }
-    return Poco::Dynamic::Var(*((*it).second));
+    return getSessionVar(key);
 }

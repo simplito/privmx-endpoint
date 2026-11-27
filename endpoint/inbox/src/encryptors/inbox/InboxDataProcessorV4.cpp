@@ -62,13 +62,13 @@ InboxDataResultV4 InboxDataProcessorV4::unpackAll(const server::InboxData& encry
     result.threadId = encryptedData.threadId;
     result.filesConfig = InboxDataHelper::fileConfigFromTypedObject(encryptedData.fileConfig);
     result.publicData = unpackPublic(encryptedData.publicData);
-    result.statusCode = result.publicData.statusCode;
-    if (result.statusCode != 0) {
+    result.error = result.publicData.error;
+    if (result.error) {
         return result;
     }
 
     result.privateData = unpackPrivate(encryptedData, inboxKey);
-    result.statusCode = result.privateData.statusCode;
+    result.error = result.privateData.error;
     return result;
 }
 
@@ -80,7 +80,6 @@ InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublicOnly(const Poco::Dyn
 InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic::Var& publicData) {
     InboxPublicDataV4AsResult result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
-    result.statusCode = 0;
     try {
         validateVersion(publicData);
         auto publicDataV4 = server::PublicDataV4::fromJSON(publicData);
@@ -91,19 +90,16 @@ InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(publicDataV4.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = InboxPublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(InboxPublicDataMismatchException());
             }
         }
         result.inboxEntriesPubKeyBase58DER = publicDataV4.inboxPubKey;
         result.inboxEntriesKeyId = publicDataV4.inboxKeyId;
         result.authorPubKey = publicDataV4.authorPubKey;
 
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking inbox data");
+    }
     return result;
 }
 
@@ -114,7 +110,6 @@ InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
 
     InboxPrivateDataV4AsResult result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
-    result.statusCode = 0;
     try {
         validateVersion(encryptedData.meta);
         auto privateDataV4 = server::PrivateDataV4::fromJSON(encryptedData.meta);
@@ -130,11 +125,9 @@ InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
             ));
         result.authorPubKey = privateDataV4.authorPubKey;
 
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking inbox data");
+    }
     return result;
 }
 

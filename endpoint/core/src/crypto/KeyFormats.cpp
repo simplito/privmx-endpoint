@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <privmx/utils/Base58.hpp>
 
+#include <privmx/crypto/CryptoException.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
@@ -386,7 +387,7 @@ TaggedPrivateKey decodePrivateKey(const std::string& base58) {
         // Its own code, not the generic malformed-key one: a failed checksum means the key was
         // mistyped or truncated in transit, which is a different thing for a caller to report than a
         // key that decodes cleanly but is of an algorithm or length we cannot use.
-        throw privmx::endpoint::crypto::InvalidChecksumException("private key is not valid Base58Check");
+        throw privmx::crypto::InvalidChecksumException("private key is not valid Base58Check");
     }
     if (payload.empty()) {
         throw MalformedEncryptionKeyException("private key is empty");

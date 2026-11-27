@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/kvdb/Events.hpp"
@@ -94,16 +93,11 @@ bool Events::isKvdbCreatedEvent(const core::EventHolder& handler) {
 }
 
 KvdbCreatedEvent Events::extractKvdbCreatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<KvdbCreatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractKvdbCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<KvdbCreatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractKvdbCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isKvdbUpdatedEvent(const core::EventHolder& handler) {
@@ -111,16 +105,11 @@ bool Events::isKvdbUpdatedEvent(const core::EventHolder& handler) {
 }
 
 KvdbUpdatedEvent Events::extractKvdbUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<KvdbUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractKvdbUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<KvdbUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractKvdbUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isKvdbDeletedEvent(const core::EventHolder& handler) {
@@ -128,16 +117,11 @@ bool Events::isKvdbDeletedEvent(const core::EventHolder& handler) {
 }
 
 KvdbDeletedEvent Events::extractKvdbDeletedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<KvdbDeletedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractKvdbDeletedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<KvdbDeletedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractKvdbDeletedEventException();
     }
+    return *event;
 }
 
 bool Events::isKvdbStatsEvent(const core::EventHolder& eventHolder) {
@@ -145,16 +129,11 @@ bool Events::isKvdbStatsEvent(const core::EventHolder& eventHolder) {
 }
 
 KvdbStatsChangedEvent Events::extractKvdbStatsEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<KvdbStatsChangedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractKvdbStatsEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<KvdbStatsChangedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractKvdbStatsEventException();
     }
+    return *event;
 }
 
 bool Events::isKvdbNewEntryEvent(const core::EventHolder& handler) {
@@ -162,16 +141,11 @@ bool Events::isKvdbNewEntryEvent(const core::EventHolder& handler) {
 }
 
 KvdbNewEntryEvent Events::extractKvdbNewEntryEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<KvdbNewEntryEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractKvdbNewEntryEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<KvdbNewEntryEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractKvdbNewEntryEventException();
     }
+    return *event;
 }
 
 bool Events::isKvdbEntryUpdatedEvent(const core::EventHolder& handler) {
@@ -179,16 +153,11 @@ bool Events::isKvdbEntryUpdatedEvent(const core::EventHolder& handler) {
 }
 
 KvdbEntryUpdatedEvent Events::extractKvdbEntryUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<KvdbEntryUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractKvdbEntryUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<KvdbEntryUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractKvdbEntryUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isKvdbEntryDeletedEvent(const core::EventHolder& handler) {
@@ -196,14 +165,9 @@ bool Events::isKvdbEntryDeletedEvent(const core::EventHolder& handler) {
 }
 
 KvdbEntryDeletedEvent Events::extractKvdbEntryDeletedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<KvdbEntryDeletedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractKvdbDeletedEntryEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<KvdbEntryDeletedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractKvdbDeletedEntryEventException();
     }
+    return *event;
 }

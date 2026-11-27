@@ -366,12 +366,10 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
         throw core::EncryptionKeyValidationException("Group key " + keyId + " could not be resolved");
     }
     const core::DecryptedEncKeyV2 found = atLocation->second.at(keyId);
-    if (found.statusCode != 0) {
+    if (found.error) {
         // `findEncKeyByKeyId` and friends hand back entries whose decryption failed; unchecked, the empty key
         // surfaces as a cipher length complaint instead of the real cause, usually an era boundary.
-        throw core::EncryptionKeyValidationException(
-            "Group key " + keyId + " could not be decrypted (status " + std::to_string(found.statusCode) + ")"
-        );
+        throw core::EncryptionKeyValidationException("Group key " + keyId + " could not be decrypted", *found.error);
     }
     // The id sealed inside the entry, not the label the bridge filed it under: another epoch's entry relabelled with
     // this keyId opens fine, and memoized it would stand in for the real key for the rest of the session.

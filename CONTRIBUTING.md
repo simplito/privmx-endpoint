@@ -31,6 +31,9 @@ Submitting Pull Requests to SIMPLITO's repositories is the only way of publishin
 - Follow the project's coding style and conventions
 - Write clear, concise, and well-documented code
 - Include comments for complex logic
+- Format with `./scripts/clang-format.sh`, which requires the pinned formatter version:
+  `pipx install clang-format==20.1.8`. Distro packages of clang-format 20 are not interchangeable —
+  their output changed in 20.1.4, so an unpinned binary produces CI-only lint failures.
 
 ### Commit Message Conventions
 

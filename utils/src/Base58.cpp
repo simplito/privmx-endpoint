@@ -13,6 +13,10 @@ limitations under the License.
 #include <regex>
 
 #include <privmx/utils/Base58.hpp>
+// Deliberately PrivmxException and not crypto's InvalidChecksumException: Base58 lives in utils/
+// now, and crypto links utils rather than the other way round — naming a crypto exception here
+// would invert that. The checksum failure still reaches callers as an exception; only its code is
+// less specific than it would be inside the crypto library.
 #include <privmx/utils/PrivmxException.hpp>
 
 using namespace privmx;

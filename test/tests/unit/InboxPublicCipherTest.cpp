@@ -89,7 +89,7 @@ TEST(InboxPublicCipher, EveryFormatSurvivesTheRoundTrip) {
         // `unpackPublicOnly` is the sender's path: no container key, only what the bridge serves publicly.
         const auto unpacked = processor.unpackPublicOnly(packed.publicData);
 
-        ASSERT_EQ(0, unpacked.statusCode) << "cipherType " << type;
+        ASSERT_EQ(0, unpacked.statusCode()) << "cipherType " << type;
         ASSERT_TRUE(unpacked.fileCipherType.has_value()) << "cipherType " << type;
         EXPECT_EQ(type, unpacked.fileCipherType.value());
     }
@@ -104,6 +104,6 @@ TEST(InboxPublicCipher, AnInboxFromBeforeTheFieldNamesNoFormat) {
     const auto packed = processor.packForServer(modelNaming(author, std::nullopt), author, anyKey());
     const auto unpacked = processor.unpackPublicOnly(packed.publicData);
 
-    ASSERT_EQ(0, unpacked.statusCode);
+    ASSERT_EQ(0, unpacked.statusCode());
     EXPECT_FALSE(unpacked.fileCipherType.has_value());
 }

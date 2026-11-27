@@ -60,7 +60,7 @@ TEST(InboxEntryFrame, ALegacyEntryStillReads) {
     inbox::InboxEntryDataEncryptorV1 encryptor;
     const auto result = encryptor.decryptPublicOnly(frame);
 
-    ASSERT_EQ(0, result.statusCode);
+    ASSERT_EQ(0, result.statusCode());
     EXPECT_EQ(SECP_PUB_KEY, result.userPubKey);
     EXPECT_TRUE(result.keyPreset);
     EXPECT_EQ(KEY_ID, result.usedInboxKeyId);
@@ -80,7 +80,7 @@ TEST(InboxEntryFrame, ALegacyEntryWithALongBodyStillReads) {
     inbox::InboxEntryDataEncryptorV1 encryptor;
     const auto result = encryptor.decryptPublicOnly(frame);
 
-    ASSERT_EQ(0, result.statusCode);
+    ASSERT_EQ(0, result.statusCode());
     EXPECT_EQ(SECP_PUB_KEY, result.userPubKey);
     EXPECT_FALSE(result.keyPreset);
     EXPECT_EQ(KEY_ID, result.usedInboxKeyId);

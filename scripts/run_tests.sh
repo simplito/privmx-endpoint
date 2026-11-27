@@ -133,11 +133,13 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
         say_err "No dataset with a ServerData.ini at '$DATASET_DIR'. Create it first:"
         say_err "  ./scripts/generate_test_dataset.sh --build-dir \"$BUILD_DIR\" --bridge-image \"$BRIDGE_IMAGE\""
         E2E_FAILED=1
-    elif echo "Starting Bridge backend via docker compose..." && (cd test/env && docker compose up -d); then
-        echo "Waiting for the backend to come up..."
-        sleep 15
+    elif echo "Starting Bridge backend via docker compose..." && (cd test/env && docker compose up -d --wait --wait-timeout 180); then
+        echo "Backend is up."
 
-        python3 test/runner/e2e_runner.py --tests-dir "$BUILD_DIR/test" --dataset-dir "$DATASET_DIR" \
+        # python3 and pip must link the system OpenSSL, so the conan runtime path is handed over
+        # in PRIVMX_RUNTIME_LD_LIBRARY_PATH and re-applied to the test binaries they spawn.
+        PRIVMX_RUNTIME_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" \
+            env -u LD_LIBRARY_PATH python3 test/runner/e2e_runner.py --tests-dir "$BUILD_DIR/test" --dataset-dir "$DATASET_DIR" \
             --docker-image "$BRIDGE_IMAGE" --max-workers $E2E_WORKERS \
             ${GTEST_FILTER_ARGS[@]+"${GTEST_FILTER_ARGS[@]}"}
         E2E_FAILED=$?

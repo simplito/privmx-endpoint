@@ -48,6 +48,7 @@ public:
          * gets is a matter of timing.
          */
         std::optional<CryptoSuite> cryptoSuite;
+        bool forwardSecrecyEnforced = true;
     };
     std::optional<CachedModuleKeys> getKeys(
         const std::string& moduleId,

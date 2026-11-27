@@ -77,7 +77,8 @@ void PmxPeerConnectionObserver::OnIceCandidate(
     if (_onIceCandidate.has_value())
         _onIceCandidate.value()(candidate);
 }
-void PmxPeerConnectionObserver::OnAddStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream
+void PmxPeerConnectionObserver::OnAddStream(
+    [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream
 ) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": STREAM ADDED")
     LOG_DEBUG("STREAMS ", "API ", "stream->video_tracks().size() -> " + std::to_string(stream->video_tracks().size()))

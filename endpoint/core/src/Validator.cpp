@@ -240,6 +240,8 @@ void Validator::validatePrivKeyWIF(const string& value, const string& stack_trac
     Validator::validateBase58(value, stack_trace);
     try {
         core::PrivateKey::fromWIF(value);
+    } catch (const Exception& e) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PrivKeyWIF"), e);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PrivKeyWIF")); }
 }
 
@@ -247,6 +249,8 @@ void Validator::validatePubKeyBase58DER(const string& value, const string& stack
     Validator::validateBase58(value, stack_trace);
     try {
         core::PublicKey::fromBase58DER(value);
+    } catch (const Exception& e) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER"), e);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
 }
 
@@ -254,6 +258,10 @@ void Validator::validatePubKeyFormat(const string& value, const string& stack_tr
     // Base58 alphabet, checksum, a known algorithm tag and the length that algorithm requires — all of
     // which `isTaggedPublicKeyFormat` reads off the encoding, so a corrupted key fails here instead of
     // at decryption time, without the scalar multiplication a full check costs.
+    //
+    // This replaces the old "33 or 65 bytes after decodeWithChecksum" test, which only knew about a
+    // bare secp256k1 point and would reject every tagged key. There is nothing to chain an inner
+    // exception onto here: the check reads the encoding itself and throws nothing of its own.
     if (!isTaggedPublicKeyFormat(value)) {
         throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER"));
     }
@@ -325,6 +333,8 @@ void Validator::validateBufferSize(
 void Validator::validateJSON(const std::string& value, const std::string& stack_trace) {
     try {
         privmx::utils::Utils::parseJson(value);
+    } catch (const Exception& e) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid JSON"), e);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid JSON")); }
 }
 

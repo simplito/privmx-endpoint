@@ -1090,9 +1090,7 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_permissions) {
 
 TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
     // The same thread under the stronger role. `item.update` is "itemOwner&user,manager", so the second
-    // alternative is met through the grant alone; `update` needs the grantee to name itself a direct manager,
-    // because `updaterIsRemovedFromManagersAndItIsForbidden` compares the submitted `managers` against the
-    // group-aware copy the grant put user_2 into; `delete` is guarded by the policy atom alone.
+    // alternative is met through the grant alone, and so are `update` and `delete`.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
@@ -1148,32 +1146,15 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
         .groupId = group_2.groupId, .role = "manager", .groupPubKey = group_2.groupPubKey
     }};
 
-    EXPECT_THROW({
-        threadApi->updateThread(
-            threadId,
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("trap_public"),
-            core::Buffer::from("trap_private"),
-            t.version,
-            false,
-            false,
-            std::nullopt,
-            grant
-        );
-    }, server::AccessDeniedException);
-
-    // Same call, same version - the refusal above left the thread untouched - but now naming user_2 as a
-    // manager of the container itself.
+    // May update the container without naming itself a direct manager: the grant it is keeping is what makes
+    // it one, so "modifier has to belong to managers" has nothing to object to.
     EXPECT_NO_THROW({
         threadApi->updateThread(
             threadId,
             std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{
-                user(1), user(2)
-            },
-            core::Buffer::from("promoted_public"),
-            core::Buffer::from("promoted_private"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("kept_public"),
+            core::Buffer::from("kept_private"),
             t.version,
             false,
             false,
@@ -1185,8 +1166,26 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
     thread::Thread updated;
     EXPECT_NO_THROW({ updated = threadApi->getThread(threadId); });
     EXPECT_EQ(updated.statusCode, 0);
-    EXPECT_EQ(updated.privateMeta.stdString(), "promoted_private");
-    EXPECT_EQ(std::count(updated.managers.begin(), updated.managers.end(), reader->getString("Login.user_2_id")), 1);
+    EXPECT_EQ(updated.privateMeta.stdString(), "kept_private");
+    // Still a manager through the grant alone - the update it just made did not make it a direct one.
+    EXPECT_EQ(std::count(updated.managers.begin(), updated.managers.end(), reader->getString("Login.user_2_id")), 0);
+
+    // But it may not revoke the grant its own manager role rides on while leaving itself off the managers:
+    // that is the self-lockout `updaterCanBeRemovedFromManagers` forbids by default.
+    EXPECT_THROW({
+        threadApi->updateThread(
+            threadId,
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("revoked_public"),
+            core::Buffer::from("revoked_private"),
+            updated.version,
+            false,
+            false,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{}
+        );
+    }, server::AccessDeniedException);
 
     // and may destroy it - last, because nothing else can run afterwards
     EXPECT_NO_THROW({ threadApi->deleteThread(threadId); });
@@ -1693,6 +1692,78 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_
     ASSERT_NO_THROW({ untouched = threadApi->getThread(threadId); });
     EXPECT_EQ(untouched.version, stale.version);
     EXPECT_EQ(untouched.staleGroups.size(), 1);
+}
+
+TEST_F(ThreadUsingGroupsTest, sendMessage_to_a_stale_thread_is_accepted_when_forward_secrecy_is_off) {
+    // `forwardSecrecy: "no"` is the container's opt-out, and the bridge honours it by accepting an item write
+    // under a key wrapped to a superseded group epoch. The endpoint must not re-key, or refuse, ahead of it.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(),
+            std::vector<core::UserWithPubKey>{user(1), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("fs_off_group_pub"),
+            core::Buffer::from("fs_off_group_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group sharedGroup;
+    ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(sharedGroup.statusCode, 0);
+
+    // user_2 may write to T but may not re-key it — the member an auto-rotation strands.
+    core::ContainerPolicy policy;
+    policy.rotateKeys = "manager";
+    policy.forwardSecrecy = "no";
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            contextId(),
+            std::vector<core::UserWithPubKey>{user(1), user(2)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("fs_off_thread_public"),
+            core::Buffer::from("fs_off_thread_private"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{
+                {.groupId = groupId, .role = "user", .groupPubKey = sharedGroup.groupPubKey}
+            }
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+
+    thread::Thread stale;
+    ASSERT_NO_THROW({ stale = threadApi->getThread(threadId); });
+    // The bridge still reports the staleness — what the opt-out changes is that it no longer blocks a write.
+    ASSERT_EQ(stale.staleGroups.size(), 1);
+
+    disconnect();
+    connectAs(2);
+
+    std::string messageId;
+    EXPECT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("fs_off_public"),
+            core::Buffer::from("fs_off_private"),
+            core::Buffer::from("fs_off_data")
+        );
+    });
+    ASSERT_FALSE(messageId.empty());
+
+    thread::Message message;
+    ASSERT_NO_THROW({ message = threadApi->getMessage(messageId); });
+    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(message.data.stdString(), "fs_off_data");
+
+    // It went out under the thread's existing key: no re-key was attempted, so none could be denied.
+    thread::Thread after;
+    ASSERT_NO_THROW({ after = threadApi->getThread(threadId); });
+    EXPECT_EQ(after.version, stale.version);
+    EXPECT_EQ(after.staleGroups.size(), 1);
 }
 
 TEST_F(ThreadUsingGroupsTest, SECURITY_a_metadata_update_after_a_rekey_keeps_the_new_key) {

@@ -12,10 +12,12 @@ limitations under the License.
 #ifndef _PRIVMXLIB_RPC_DRIVER_WEBSOCKETCHANNEL_HPP_
 #define _PRIVMXLIB_RPC_DRIVER_WEBSOCKETCHANNEL_HPP_
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <functional>
 #include <istream>
+#include <mutex>
 #include <unordered_map>
 
 #include <privmx/drv/net.h>
@@ -48,9 +50,12 @@ private:
         static std::string toRaw(const Poco::Int32& id, const std::string& data);
     };
 
+    enum class SocketState { Idle, Connecting, Open, Closed };
+
     void connect(const std::string& path);
     void rejectAllPromises();
     void tryJoinThreads();
+    static void runCallback(void* ctx, const std::function<void(WebSocketChannel&)>& callback);
     static void onopen(void* ctx);
     static void onmessage(void* ctx, const char* msg, int msglen);
     static void onerror(void* ctx, const char* msg, int msglen);
@@ -64,12 +69,19 @@ private:
     Poco::Int32 _id = 1;
     std::map<Poco::Int32, std::promise<std::string>> _promises;
     utils::Mutex _promises_mutex;
-    bool _connected = false;
+    // Guarded by _connected_mutex together with _ws; every change to either is announced on
+    // _connected_cv, so a sender parked in send() is woken by an open, a close and a teardown alike.
+    SocketState _socket_state = SocketState::Idle;
     utils::Mutex _connected_mutex;
     utils::Mutex _state_mutex;
     std::thread _process_incoming_data_thread;
     std::thread _ping_thread;
     std::condition_variable _connected_cv;
+    // The driver calls back through a raw pointer to this channel, so teardown has to shut new
+    // callbacks out and wait for one that is already running. Recursive: a callback may disconnect.
+    std::atomic_bool _disconnecting = false;
+    // Also held across privmxDrvNet_wsSend, so disconnect() cannot free _ws under an ongoing send.
+    utils::RecursiveMutex _callback_mutex;
 };
 
 } // driverimpl

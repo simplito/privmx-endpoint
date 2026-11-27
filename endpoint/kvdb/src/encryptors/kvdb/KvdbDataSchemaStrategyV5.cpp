@@ -29,7 +29,7 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::convert(
 ) const {
     return {
         KvdbDataSchemaMapper::toLibKvdb(
-            kvdb, raw.publicMeta, raw.privateMeta, raw.statusCode, KvdbDataSchema::Version::VERSION_5
+            kvdb, raw.publicMeta, raw.privateMeta, raw.statusCode(), KvdbDataSchema::Version::VERSION_5
         ),
         raw.dio
     };

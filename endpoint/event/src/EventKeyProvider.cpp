@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/event/EventKeyProvider.hpp"
 #include <privmx/crypto/CryptoException.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint::event;
@@ -26,16 +25,14 @@ DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(
     const core::PublicKey& authorPubKey
 ) {
     std::string encKey;
-    int64_t statusCode = 0;
+    std::shared_ptr<const core::Exception> error;
     try {
         encKey = core::Ecies::decryptFromBase64(_key, encryptedKey, authorPubKey);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { error = core::asError(e); } catch (...) {
+        error = core::unknownError("decrypting the event encryption key");
+    }
     return DecryptedEventEncKeyV1{
-        core::DecryptedVersionedData{.dataStructureVersion = 1, .statusCode = statusCode}, encKey
+        core::DecryptedVersionedData{.dataStructureVersion = 1, .error = error}, encKey
     };
 }
 std::vector<server::UserKey> EventKeyProvider::prepareKeysList(

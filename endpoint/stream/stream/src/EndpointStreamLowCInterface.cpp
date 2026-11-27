@@ -71,8 +71,9 @@ int privmx_endpoint_stream_newProxyWebRTC(
     privmx_endpoint_stream_WebRTCInterface webRTCInterface,
     privmx_endpoint_stream_ProxyWebRTC** outPtr
 ) {
-    *outPtr = (privmx_endpoint_stream_ProxyWebRTC*
-    )new std::shared_ptr<stream::ProxyWebRTC>(std::make_shared<stream::ProxyWebRTC>(webRTCInterface));
+    *outPtr = (privmx_endpoint_stream_ProxyWebRTC*)new std::shared_ptr<stream::ProxyWebRTC>(
+        std::make_shared<stream::ProxyWebRTC>(webRTCInterface)
+    );
     return 1;
 }
 

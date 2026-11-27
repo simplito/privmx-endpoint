@@ -27,7 +27,7 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::conv
 ) const {
     return {
         EntryDataSchemaMapper::toLibKvdbEntry(
-            entry, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode,
+            entry, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode(),
             KvdbEntryDataSchema::Version::VERSION_5
         ),
         raw.dio

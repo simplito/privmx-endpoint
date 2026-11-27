@@ -14,7 +14,6 @@ limitations under the License.
 #include <Poco/ByteOrder.h>
 #include <cstring>
 #include <privmx/cryptoservice/base/CoreTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/crypto/ProviderAccess.hpp>
 #include <privmx/utils/Logger.hpp>
 
@@ -87,9 +86,6 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
         return result;
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-        return result;
     } catch (...) {
         result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
         return result;
@@ -104,11 +100,9 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
             parsedEncryptedMessage.ciphertext, false
         ));
         updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
     return result;
 }
 

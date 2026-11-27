@@ -15,7 +15,6 @@ limitations under the License.
 #include <optional>
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/core/encryptors/IDataSchemaStrategy.hpp"
 
@@ -33,11 +32,9 @@ public:
     ) const override final {
         try {
             return convert(model, decrypt(model, encKey, verifiedDio));
-        } catch (const core::Exception& e) {
-            return makeErrorResult(model, e.getCode());
-        } catch (const privmx::utils::PrivmxException& e) {
-            return makeErrorResult(model, ExceptionConverter::convert(e).getCode());
-        } catch (...) { return makeErrorResult(model, ENDPOINT_CORE_EXCEPTION_CODE); }
+        } catch (const core::Exception& e) { return makeErrorResult(model, e.getCode()); } catch (...) {
+            return makeErrorResult(model, ENDPOINT_CORE_EXCEPTION_CODE);
+        }
     }
 
     virtual TRawData decrypt(const TServerModel& model, const DecryptedEncKey& encKey) const = 0;

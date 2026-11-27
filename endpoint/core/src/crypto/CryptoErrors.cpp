@@ -12,6 +12,9 @@ limitations under the License.
 #include <privmx/cryptoservice/base/AsyncExceptions.hpp>
 #include <privmx/cryptoservice/base/Exceptions.hpp>
 
+// The crypto exception scope moved out of ConvertedExceptions into the crypto library's own public
+// header, so `crypto::` here is `privmx::crypto`, not `privmx::endpoint::crypto`.
+#include <privmx/crypto/CryptoException.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/CryptoErrors.hpp>
@@ -99,5 +102,7 @@ void CryptoErrors::rethrow(const std::exception& e, const std::string& context) 
     // so those are caught by the branch above and reported as `SymmetricCipherFailureException` rather
     // than falling through to this one. The branch stays: it is the catch-all for a hierarchy that is
     // still growing, and a pmx-crypto error reaching the caller untranslated would carry no code.
-    throw crypto::EndpointCryptoException(description);
+    // Named `CryptoException` since the scope moved into the crypto library; it is the same
+    // catch-all the endpoint used to spell `EndpointCryptoException`.
+    throw crypto::CryptoException(description);
 }

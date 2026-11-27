@@ -141,7 +141,7 @@ dynamic::InternalStoreFileMeta FileMetaDataSchemaMapper::decryptFileInternalMeta
     const server::File& file,
     const core::DecryptedEncKey& encKey
 ) {
-    if (encKey.statusCode == 0) {
+    if (encKey.statusCode() == 0) {
         switch (getDataStructureVersion(file)) {
         case FileDataSchema::Version::VERSION_4:
             return dynamic::InternalStoreFileMeta::fromJSON(

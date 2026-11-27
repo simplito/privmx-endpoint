@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <privmx/cryptoservice/base/CoreTypes.hpp>
 
+#include <privmx/crypto/CryptoException.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/CryptoErrors.hpp>
@@ -119,9 +120,9 @@ void requireKeyLength(const SuiteSpec& spec, const std::string& key, bool forEnc
         ", received: " +
         std::to_string(key.size());
     if (forEncryption) {
-        throw privmx::endpoint::crypto::EncryptInvalidKeyLengthException(detail);
+        throw privmx::crypto::EncryptInvalidKeyLengthException(detail);
     }
-    throw privmx::endpoint::crypto::DecryptInvalidKeyLengthException(detail);
+    throw privmx::crypto::DecryptInvalidKeyLengthException(detail);
 }
 
 } // namespace

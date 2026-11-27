@@ -29,9 +29,18 @@ Cryptography is provided entirely by **pmx-crypto**, which is an ordinary Conan 
 
 ### 1. Building with Conan (Recommended)
 
-Conan resolves all dependencies automatically: `pmx-crypto`, `poco`, `openssl`, `gmp`, `pson`, `privmxdrvnet`, `sqlite3`, `gtest`, `readline`.
+All Conan builds (local and CI) go through `conanfile-dev.py`. It resolves `pmx-crypto`, `poco`, `openssl`, `gmp`, `pson`, `sqlite3`, `privmxdrvnet`, and pulls the optional dependencies only when the matching option is on:
 
-`pmx-crypto` requires C++20 and says so (`check_min_cppstd(20)`), while `conan profile detect` settles on `gnu17` — so every `conan install` below passes `-s compiler.cppstd=20`. Without it the install is rejected before anything is compiled.
+| Conan option | Default | Adds | Turns on |
+|--------------|---------|------|----------|
+| `with_webrtc` | False | `libwebrtc` | `PRIVMX_BUILD_WITH_WEBRTC`, `USE_PREBUILT_WEBRTC` |
+| `with_cli` | False | `readline` | `PRIVMX_BUILD_CLI` |
+| `with_tests` | True | `gtest` | `PRIVMX_ENABLE_TESTS` |
+| `private_headers` | False | — | `PRIVMX_INSTALL_PRIVATE_HEADERS` + `transitive_headers` on dependencies |
+
+Those CMake options come from the generated toolchain, so they must not be repeated on the `cmake` command line.
+
+`pmx-crypto` requires C++20 and says so (`check_min_cppstd(20)`), while `conan profile detect` settles on `gnu17` — so every `conan install` below passes `-s compiler.cppstd=20`. Without it the install is rejected before anything is compiled. The crypto drivers `privmxdrvcrypto` and `privmxdrvecc` are gone: pmx-crypto replaces both.
 
 **Quick start:**
 ```bash
@@ -41,17 +50,21 @@ Conan resolves all dependencies automatically: `pmx-crypto`, `poco`, `openssl`, 
 **Manual steps:**
 ```bash
 mkdir -p ./build
-conan install . --output-folder=build --build=missing -s build_type=Debug -s compiler.cppstd=20
+conan install conanfile-dev.py --output-folder=build --build=missing -s build_type=Debug \
+  -s compiler.cppstd=20 \
+  -o "&:with_webrtc=False" -o "&:with_cli=False" -o "&:with_tests=True" \
+  -c 'tools.build:cflags=["-std=gnu17"]'
 cd build
 source build/Debug/generators/conanbuild.sh
 cmake .. -G "Unix Makefiles" \
   -DCMAKE_TOOLCHAIN_FILE=build/Debug/generators/conan_toolchain.cmake \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DPRIVMX_CONAN=ON \
-  -DPRIVMX_ENABLE_TESTS=ON
+  -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -- -j$(nproc)
 source build/Debug/generators/deactivate_conanbuild.sh
 ```
+
+> The `tools.build:cflags` setting is required on GCC 15+ and Clang 20+, which default to `-std=gnu23`.
+> The legacy `termcap` dependency (pulled in by `readline`) has K&R sources that no C23 compiler accepts.
 
 ### 2. Building without Conan (find_package)
 

@@ -13,7 +13,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
 

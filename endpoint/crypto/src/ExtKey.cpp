@@ -33,7 +33,6 @@ limitations under the License.
 
 #include <privmx/crypto/pmxcrypto/ProviderAccess.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 namespace cs = privmx::cryptoservice;
 
@@ -59,16 +58,14 @@ constexpr cs::AsymAlg ALG = cs::AsymAlg::PrivmxSecp256k1;
 /**
  * Runs an operation, turning pmx-crypto's failures into the exception type callers expect.
  *
- * `privmx::utils::PrivmxException` is still caught: the operations below reach `core::PrivateKey`
- * and friends, which raise it.
+ * Only `cs::Exception` is translated now. The `privmx::utils::PrivmxException` branch went with
+ * ExceptionConverter: `core::PrivateKey` and friends raise a `core::Exception` directly, which
+ * passes through untouched and already carries its own code.
  */
 template<class Operation>
 auto guarded(Operation&& operation) -> decltype(operation()) {
     try {
         return operation();
-    } catch (const privmx::utils::PrivmxException& e) {
-        privmx::endpoint::core::ExceptionConverter::rethrowAsCoreException(e);
-        throw privmx::endpoint::core::Exception("ExceptionConverter rethrow error");
     } catch (const cs::Exception& e) {
         throw privmx::endpoint::core::Exception(std::string("ExtKey: ") + e.what());
     }
