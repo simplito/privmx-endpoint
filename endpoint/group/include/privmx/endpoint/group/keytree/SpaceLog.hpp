@@ -99,7 +99,7 @@ public:
     static std::string rosterHash(std::vector<SpaceLogGroup> groups, std::vector<SpaceLogUser> users);
     // Sets the deltas and the rosterHash that take `prior`'s recipients (none for a creation) to `groups` and
     // `users`: a group whose epoch and key moved, in the same role, is refreshed; any other entry that differs is
-    // removed and added (which no statement may do: `apply` refuses it). The writers' and the tests' one way in.
+    // removed and added (which no statement may do: `apply` refuses it).
     static void setRoster(
         SpaceStatement& statement,
         const std::optional<SpaceLogState>& prior,
@@ -124,7 +124,8 @@ public:
     // the recipients before it, that its deltas apply cleanly and only as its op allows (an add only adds absent
     // recipients, a removal only removes present ones, a refresh only moves a recipient group to a later epoch and
     // another key; each id once), that the result keeps a manager and hashes to its rosterHash, and the key version.
-    // A recipient group's pinned epoch and key move forward only, by a manager or through that group itself.
+    // A recipient group's pinned epoch and key move forward only, by any recipient: whether the key is the group's is
+    // the reader's to check (GroupApiImpl::requireGroupKeyRefreshesHold).
     // What it cannot check is that `signer` is who holds `signerPubKey`: that is the caller's to ask the UserVerifier.
     // Throws GroupDataIntegrityException or GroupUnauthorizedSignerException.
     static SpaceLogState apply(const std::optional<SpaceLogState>& prior, const SpaceStatement& statement);

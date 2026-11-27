@@ -688,11 +688,14 @@ public:
     // earlier ones it skips to (a key ladder: about two 60-byte rungs a version, whatever the number of recipients),
     // so whoever holds the current key reads every earlier version: about 2*log2(versions back) requests the first
     // time, then from memory for the session. Every key so derived is checked against the commitment the Space's
-    // signed statement made for its version. A rung that gives another key is passed by: the reader uses its own
-    // wrap of that version, or of one on the way, while the Bridge keeps it (a rotation by anyone but a manager keeps
-    // the earlier wraps, since the Bridge cannot check a rung), and fails with GroupDataIntegrityException otherwise.
-    // So a recipient reads the whole history, a newcomer included, and a removed one gets no later key. The number
-    // of key versions has no ceiling of its own; the Bridge's rotation rate limit stays.
+    // signed statement made for its version. A rung that gives another key is passed by: the reader tries the other
+    // rungs of that version, then its own wrap of that version or of one on the way, and fails with
+    // GroupDataIntegrityException otherwise. Earlier wraps are kept until a manager's rotation prunes them, which it
+    // does only once it has checked every rung since the last prune and added a repair rung where one did not hold.
+    // So once the ladder holds, a recipient reads the whole history, a newcomer included, and a removed one gets no
+    // later key. Garbage rungs a member wrote are repaired at the next pruning manager rotation; until then a newcomer
+    // (who has no earlier wraps) may not reach the versions behind them. The number of key versions has no ceiling of
+    // its own; the Bridge's rotation rate limit stays.
     //
     // With a PinStore set, the device keeps each Space's verified state: the next session checks only the
     // statements since, and refuses a history served behind it or rewritten under it (GroupHistoryForkException).
@@ -795,7 +798,9 @@ public:
      * One symmetric encryption and one signature. When the key is stale, it is replaced first, by any recipient:
      * nothing is written under a key a removed member holds. The replacement moves each recipient Group whose epoch
      * moved to its current key; a reader checks that key against what it can verify of the Group (refusing one
-     * shown wrong), and takes one it cannot verify (a Group hidden from that reader) as the recipient signed it.
+     * shown wrong), and takes one it cannot verify (a Group hidden from that reader) as the recipient signed it. A
+     * known gap the owner accepted: with a lying Bridge, a member of the Space could so show such a reader a made-up
+     * key for that Group, and a made-up list of recipients signed with it.
      * A caller who cannot see a recipient Group gets SpaceRecipientUnavailableException, also under a fresh key
      * (see the note above).
      */

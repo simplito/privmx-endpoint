@@ -456,7 +456,10 @@ JSON_STRUCT(SpaceGetStatementsResult, SPACE_GET_STATEMENTS_RESULT_FIELDS);
     F(publicMeta, Poco::Dynamic::Var)                                                                                  \
     F(privateMeta, Poco::Dynamic::Var)                                                                                 \
     F(publicMetaVersion, int64_t)                                                                                      \
-    F(privateMetaVersion, int64_t)
+    F(privateMetaVersion, int64_t)                                                                                     \
+    F(keysPrunedBelow, std::optional<int64_t>)
+// `keysPrunedBelow`: the version the last honoured prune was made at (0: never). The rungs of the versions after it
+// have not been checked by a pruning manager.
 JSON_STRUCT(SpaceInfo, SPACE_INFO_FIELDS);
 
 #define SPACE_CREATE_MODEL_FIELDS(F)                                                                                   \
@@ -517,10 +520,14 @@ JSON_STRUCT(SpaceAddRecipientsModel, SPACE_ADD_RECIPIENTS_MODEL_FIELDS);
     F(keyId, std::string)                                                                                              \
     F(keys, std::vector<SpaceKeyEntry>)                                                                                \
     F(rungs, std::vector<SpaceRung>)                                                                                   \
+    F(repairRungs, std::optional<std::vector<SpaceRung>>)                                                              \
+    F(prune, std::optional<bool>)                                                                                      \
     F(statement, SpaceStatement)                                                                                       \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(groups, std::optional<std::vector<std::string>>)                                                                 \
     F(users, std::optional<std::vector<std::string>>)
+// `repairRungs` (earlier versions' spans with no rung that opens to the committed key) and `prune` (drop the wraps
+// of the earlier versions) only from a manager's statement; `prune` only once every rung since the last prune checks.
 JSON_STRUCT(SpaceRotateKeyModel, SPACE_ROTATE_KEY_MODEL_FIELDS);
 
 #define SPACE_ROTATE_KEY_RESULT_FIELDS(F) F(keyVersion, int64_t)

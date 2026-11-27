@@ -703,7 +703,10 @@ struct SpaceLogEntry {
     std::vector<std::string> addedUsers;
     std::vector<std::string> removedGroups;
     std::vector<std::string> removedUsers;
-    /** Recipient Groups whose key moved to a later epoch (a member removed from the Group since): the epoch now. */
+    /**
+     * Recipient Groups whose key moved to a later epoch (any epoch advance of the Group: a member removed, a key
+     * rotation, a member's key replaced): the epoch now.
+     */
     std::vector<SpaceGroupRecipient> refreshedGroups;
 };
 

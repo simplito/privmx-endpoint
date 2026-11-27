@@ -552,6 +552,15 @@ private:
         std::int64_t keyVersion,
         const std::vector<server::SpaceKeyEntry>& entries
     );
+    // A pruning manager's check of the ladder since `space.keysPrunedBelow`: a repair rung (at most `room`) for each
+    // canonical span with no rung that opens to the committed key, and whether every span then holds - only then
+    // may the rotation prune the earlier wraps.
+    std::pair<std::vector<server::SpaceRung>, bool> spaceLadderRepairs(
+        const server::SpaceInfo& space,
+        std::size_t room
+    );
+    // The Bridge's cap on the rungs of one rotation, new and repair ones together.
+    static constexpr std::size_t MAX_SPACE_RUNGS_PER_REQUEST = 64;
     // The rungs a new version `next` publishes: its key sealed over each canonical target's (LadderMath, floor 1).
     std::vector<server::SpaceRung> spaceRungsFor(
         const server::SpaceInfo& space,

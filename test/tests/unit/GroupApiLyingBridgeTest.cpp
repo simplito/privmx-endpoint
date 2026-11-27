@@ -173,6 +173,9 @@ struct Bridge {
         std::vector<server::SpaceRung> rungs;
         std::vector<server::SpaceStatement> statements;
     };
+    // Edits a rotation as it arrives (`caller`, the request), before it is checked and stored.
+    std::function<void(const std::string&, server::SpaceRotateKeyModel&)> onSpaceRotate =
+        [](const std::string&, server::SpaceRotateKeyModel&) {};
     // Edits what `spaceGetKeyArchive` serves.
     std::function<void(server::SpaceGetKeyArchiveResult&)> onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) {};
     std::map<std::string, StoredSpace> spaces;
@@ -247,6 +250,7 @@ struct Bridge {
             space.info.privateMeta = model.privateMeta;
             space.info.publicMetaVersion = 1;
             space.info.privateMetaVersion = 1;
+            space.info.keysPrunedBelow = 0;
             space.keys = model.keys;
             applyStatement(space, model.statement, caller);
             return server::SpaceCreateResult{.spaceId = id}.toJSON();
@@ -304,7 +308,8 @@ struct Bridge {
             return result.toJSON();
         }
         if (method == "spaceRotateKey" || method == "spaceRemoveRecipients") {
-            const auto model = server::SpaceRotateKeyModel::fromJSON(params);
+            auto model = server::SpaceRotateKeyModel::fromJSON(params);
+            onSpaceRotate(caller, model);
             const std::int64_t next = space.info.keyVersion + 1;
             std::vector<RungSpan> spans;
             for (const auto& rung : model.rungs) {
@@ -312,12 +317,23 @@ struct Bridge {
                     static_cast<std::uint32_t>(rung.atKeyVersion), static_cast<std::uint32_t>(rung.targetKeyVersion)
                 });
             }
+            const auto repairs = model.repairRungs.value_or(std::vector<server::SpaceRung>{});
             if (!LadderMath::validateRungSet(spans, static_cast<std::uint32_t>(next), 1).ok ||
                 spans.size() != LadderMath::rungSpansFor(static_cast<std::uint32_t>(next), 1).size() ||
+                spans.size() + repairs.size() > 64 ||
                 std::any_of(model.keys.begin(), model.keys.end(), [&](const auto& e) { return e.keyVersion != next; })) {
                 throw std::runtime_error("SPACE_KEYS_INVALID");
             }
-            // The earlier versions' wraps go after a manager's rotation only: anyone else's rungs could be garbage.
+            for (const auto& repair : repairs) {
+                const auto owed = LadderMath::rungSpansFor(static_cast<std::uint32_t>(repair.atKeyVersion), 1);
+                if (repair.atKeyVersion < 2 || repair.atKeyVersion >= next ||
+                    std::none_of(owed.begin(), owed.end(), [&](const RungSpan& span) {
+                        return span.target == static_cast<std::uint32_t>(repair.targetKeyVersion);
+                    })) {
+                    throw std::runtime_error("SPACE_KEYS_INVALID");
+                }
+            }
+            // Repair rungs and a prune only from a manager's statement; a manager's rotation prunes only when asked.
             const bool byManager = model.statement.via.empty() ?
                 std::any_of(space.info.users.begin(), space.info.users.end(), [&](const auto& u) {
                     return u.userId == model.statement.signer && u.role == "manager";
@@ -325,11 +341,17 @@ struct Bridge {
                 std::any_of(space.info.groups.begin(), space.info.groups.end(), [&](const auto& g) {
                     return g.groupId == model.statement.via && g.role == "manager";
                 });
-            if (byManager) {
+            if (!byManager && (model.prune.value_or(false) || !repairs.empty())) {
+                throw std::runtime_error("SPACE_STATEMENT_INVALID");
+            }
+            if (model.prune.value_or(false)) {
                 space.keys.clear();
+                space.info.keysPrunedBelow = next;
             }
             space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
+            // Append-only, several per span: every one is served.
             space.rungs.insert(space.rungs.end(), model.rungs.begin(), model.rungs.end());
+            space.rungs.insert(space.rungs.end(), repairs.begin(), repairs.end());
             space.info.keyId = model.keyId;
             applyStatement(space, model.statement, caller);
             return server::SpaceRotateKeyResult{.keyVersion = space.info.keyVersion}.toJSON();
@@ -5693,6 +5715,91 @@ TEST_F(GroupApiLyingBridgeSpaces, AStatementCarriesItsChangesNotTheRoster) {
     EXPECT_EQ(read.users.size(), 30u);
 }
 
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_GarbageRungsFromAMemberAreRepairedAtTheNextManagerRotation) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    // bob, a user of the Space, rotates twice with rungs that open to nothing (the Bridge cannot tell).
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob") {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    client("bob").rotateSpaceKey(spaceId);
+    client("bob").rotateSpaceKey(spaceId);
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0) << "no prune from a user's rotation";
+    // A newcomer has no earlier wrap to go round them.
+    client("alice").addSpaceRecipients(spaceId, {person("carol", "user")});
+    EXPECT_THROW(sibling("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY), GroupDataIntegrityException);
+
+    // alice, a manager, rotates: she checks versions 1..3, repairs 2->1 and 3->2 (her own wraps still reach the keys),
+    // and prunes.
+    sibling("alice").rotateSpaceKey(spaceId);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    ASSERT_TRUE(sent.repairRungs.has_value());
+    std::set<std::pair<std::int64_t, std::int64_t>> repaired;
+    for (const auto& rung : sent.repairRungs.value()) {
+        repaired.insert({rung.atKeyVersion, rung.targetKeyVersion});
+    }
+    EXPECT_EQ(repaired, (std::set<std::pair<std::int64_t, std::int64_t>>{{2, 1}, {3, 2}}));
+    EXPECT_EQ(sent.prune, std::optional<bool>(true));
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 4);
+    for (const auto& entry : bridge.spaces.at(spaceId).keys) {
+        EXPECT_EQ(entry.keyVersion, 4) << "the earlier wraps went";
+    }
+    // The garbage rungs stay beside the repairs; a newcomer reads version 1 down the ladder.
+    EXPECT_EQ(sibling("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
+    // The next manager rotation has nothing left to repair.
+    sibling("alice").rotateSpaceKey(spaceId);
+    const auto next = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    EXPECT_FALSE(server::SpaceRotateKeyModel::fromJSON(next->params).repairRungs.has_value());
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AManagerDoesNotPruneWhatSheCannotCheck) {
+    const std::string spaceId = makeSpace();
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob") {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    client("bob").rotateSpaceKey(spaceId);
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    // alice's earlier wraps are not served to her: version 1 is out of her reach.
+    bridge.onSpaceArchive = [](server::SpaceGetKeyArchiveResult& result) { result.keys.clear(); };
+    sibling("alice").rotateSpaceKey(spaceId);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    EXPECT_FALSE(sent.prune.value_or(false));
+    EXPECT_FALSE(sent.repairRungs.has_value()) << "nothing she could seal";
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0);
+    EXPECT_TRUE(std::any_of(bridge.spaces.at(spaceId).keys.begin(), bridge.spaces.at(spaceId).keys.end(), [](const auto& e) {
+        return e.keyVersion == 1;
+    })) << "version 1's wraps are kept";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AnotherStatementAtTheStoredPositionIsAFork) {
+    store = std::make_shared<MemoryPinStore>();
+    const std::string spaceId = makeSpace();
+    client("alice").rotateSpaceKey(spaceId);
+    client("bob").getSpace(spaceId); // stores seq 2
+    clients.erase("bob");
+    // The Bridge serves seq 2 again, but another statement there.
+    auto& last = bridge.spaces.at(spaceId).statements.back();
+    last.signature = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(65));
+    EXPECT_THROW(client("bob").getSpace(spaceId), GroupHistoryForkException);
+}
+
 TEST_F(GroupApiLyingBridgeSpaces, AStoredStateOfTheEarlierBlobVersionIsAFirstContact) {
     store = std::make_shared<MemoryPinStore>();
     const std::string spaceId = makeSpace();
@@ -5701,15 +5808,28 @@ TEST_F(GroupApiLyingBridgeSpaces, AStoredStateOfTheEarlierBlobVersionIsAFirstCon
     clients.erase("bob");
     const std::string slot = store->keyWith("space-pins/", "/" + bridge.users.at("bob").getPublicKey().toBase58DER());
     ASSERT_FALSE(slot.empty());
+    const auto storedAs = [&](std::uint8_t version, const std::string& body) {
+        store->save(
+            slot, core::Buffer::from(core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", version, slot).seal(body)),
+            core::Buffer::from(store->get(slot))
+        );
+    };
     // Version 1: "<id> <seq> <digest>" lines, here claiming a position far ahead of the Bridge.
-    store->save(
-        slot,
-        core::Buffer::from(core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", 1, slot)
-                               .seal(spaceId + " 99 " + std::string(64, '0') + "\n")),
-        core::Buffer::from(store->get(slot))
-    );
+    storedAs(1, spaceId + " 99 " + std::string(64, '0') + "\n");
     EXPECT_EQ(client("bob").getSpace(spaceId).keyVersion, 2) << "not read as pins: no fork";
-    const auto body = core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", 2, slot).open(store->get(slot));
+    // Version 2: whole states, as a build before statements were deltas kept them; one far ahead, too.
+    clients.erase("bob");
+    keytree::SpaceLogState ahead;
+    ahead.spaceId = spaceId;
+    ahead.contextId = CONTEXT;
+    ahead.creator = "alice";
+    ahead.seq = 99;
+    ahead.digest = std::string(32, 'x');
+    ahead.keyVersion = 1;
+    ahead.keyCommits[1] = std::string(32, 'y');
+    storedAs(2, SpaceLog::encodeStates({{spaceId, ahead}}));
+    EXPECT_EQ(client("bob").getSpace(spaceId).keyVersion, 2) << "a version 2 blob is a first contact as well";
+    const auto body = core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", 3, slot).open(store->get(slot));
     ASSERT_TRUE(body.has_value()) << "rewritten in the current version";
     const auto states = SpaceLog::decodeStates(body.value());
     ASSERT_TRUE(states.has_value());
