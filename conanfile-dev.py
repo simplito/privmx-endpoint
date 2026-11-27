@@ -28,6 +28,10 @@ class PrivmxEndpointDevRecipe(ConanFile):
     def requirements(self):
         self.requires("privmxdrvnet/1.0.3")
         self.requires("gmp/6.3.0")
+        # transitive_headers because core's public headers (crypto/PrivateKey.hpp and relatives, and
+        # endpoint/crypto's ExtKey.hpp) include privmx/cryptoservice/*, so a consumer of the Endpoint
+        # needs pmx-crypto's include paths too — the same reason it is PUBLIC on the CMake target.
+        self.requires("pmx-crypto/0.1", transitive_headers=True)
         if self.options.with_webrtc:
             self.requires("libwebrtc/m125.1.0")
         self.requires("poco/1.13.2")
@@ -111,6 +115,7 @@ class PrivmxEndpointDevRecipe(ConanFile):
                 "pson::Pson",
                 "poco::poco",
                 "privmxdrvnet::privmxdrvnet",
+                "pmx-crypto::pmx-crypto",
             ]
 
         self.cpp_info.components["privmxendpointcore"].libs = ["privmxendpointcore"]
@@ -120,12 +125,15 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "pson::Pson",
             "poco::poco",
             "privmxdrvnet::privmxdrvnet",
+            "pmx-crypto::pmx-crypto",
         ]
 
         self.cpp_info.components["privmxendpointcrypto"].libs = ["privmxendpointcrypto"]
         self.cpp_info.components["privmxendpointcrypto"].set_property("cmake_target_name", "privmxendpoint::privmxendpointcrypto")
         self.cpp_info.components["privmxendpointcrypto"].requires = [
             "gmp::gmp",
+            # ExtKey.hpp is a public header and includes privmx/cryptoservice/*.
+            "pmx-crypto::pmx-crypto",
         ]
 
         self.cpp_info.components["privmxendpointthread"].libs = ["privmxendpointthread"]

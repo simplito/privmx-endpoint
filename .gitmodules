@@ -1,3 +1,0 @@
-[submodule "pmx-crypto"]
-	path = pmx-crypto
-	url = git@github.com:simplito/pmx-crypto.git

@@ -3,7 +3,9 @@ set -e
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p ./build
 BUILD_TYPE="Debug"
-conan install conanfile-streams.txt --output-folder=build --build=missing -s build_type=$BUILD_TYPE
+# -s compiler.cppstd=20: pmx-crypto's recipe calls check_min_cppstd(20), and a detected profile
+# settles on gnu17.
+conan install conanfile-streams.txt --output-folder=build --build=missing -s build_type=$BUILD_TYPE -s compiler.cppstd=20
 cd build
 
 GENERATORS_DIR="build/$BUILD_TYPE/generators"

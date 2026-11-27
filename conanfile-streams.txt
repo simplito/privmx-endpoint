@@ -1,4 +1,5 @@
 [requires]
+pmx-crypto/0.1
 poco/1.13.2
 pson/1.0.7
 openssl/[>=3.5.9 <3.6]

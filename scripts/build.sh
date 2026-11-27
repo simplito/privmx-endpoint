@@ -3,7 +3,10 @@ set -e
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p ./build
 BUILD_TYPE="Debug"
-conan install . --output-folder=build --build=missing -s build_type=$BUILD_TYPE
+# cppstd is passed explicitly: pmx-crypto's recipe calls check_min_cppstd(20) and `conan profile
+# detect` settles on gnu17, so without this the install fails before anything is built. The library
+# itself has been C++20 since CMakeLists.txt set CMAKE_CXX_STANDARD 20 — this only tells Conan so.
+conan install . --output-folder=build --build=missing -s build_type=$BUILD_TYPE -s compiler.cppstd=20
 cd build
 GENERATORS_DIR="build/$BUILD_TYPE/generators"
 

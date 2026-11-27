@@ -25,17 +25,13 @@ PrivMX enables communication through **text messages**, **secure file storage** 
 - CMake ≥ 3.10.2
 - C++20-capable compiler (GCC or Clang)
 - [Conan 2.x](https://conan.io/) (recommended) — or manually provided pre-built libraries
-- Git, with submodules initialised — cryptography lives in the `pmx-crypto` submodule and is built from source:
-
-```bash
-git submodule update --init --recursive
-```
-
-Cryptography is provided entirely by **pmx-crypto**; there are no crypto driver backends any more. Of the `privmxdrv*` drivers only networking (`privmxdrvnet`) remains, resolved automatically by Conan or supplied manually when building without it.
+Cryptography is provided entirely by **pmx-crypto**, which is an ordinary Conan dependency — this repository has no git submodules, so a plain `git clone` is enough. There are no crypto driver backends any more. Of the `privmxdrv*` drivers only networking (`privmxdrvnet`) remains, resolved automatically by Conan or supplied manually when building without it.
 
 ### 1. Building with Conan (Recommended)
 
-Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`, `privmxdrvnet`, `sqlite3`, `gtest`, `readline`.
+Conan resolves all dependencies automatically: `pmx-crypto`, `poco`, `openssl`, `gmp`, `pson`, `privmxdrvnet`, `sqlite3`, `gtest`, `readline`.
+
+`pmx-crypto` requires C++20 and says so (`check_min_cppstd(20)`), while `conan profile detect` settles on `gnu17` — so every `conan install` below passes `-s compiler.cppstd=20`. Without it the install is rejected before anything is compiled.
 
 **Quick start:**
 ```bash
@@ -45,7 +41,7 @@ Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`,
 **Manual steps:**
 ```bash
 mkdir -p ./build
-conan install . --output-folder=build --build=missing -s build_type=Debug
+conan install . --output-folder=build --build=missing -s build_type=Debug -s compiler.cppstd=20
 cd build
 source build/Debug/generators/conanbuild.sh
 cmake .. -G "Unix Makefiles" \
@@ -63,6 +59,7 @@ When Conan is not available, CMake will attempt to locate the following librarie
 
 | Library | Version |
 |---------|---------|
+| pmx-crypto | 0.1 |
 | poco | 1.13.2 |
 | pson | 1.0.7 |
 | openssl | ≥ 3.5.9, < 3.6 |
@@ -73,7 +70,7 @@ When Conan is not available, CMake will attempt to locate the following librarie
 | readline | ≥ 8.2.0 *(optional, needed for CLI)* |
 | libwebrtc | m125 *(optional, needed for WebRTC streaming)* |
 
-pmx-crypto is not listed here: it is a git submodule, added with `add_subdirectory` and built together with the library, so `find_package` never looks for it.
+`pmx-crypto` is looked up like the rest — `find_package(pmx-crypto REQUIRED)`, giving the target `pmx-crypto::privmxcryptolib`. Building it from its own repository and installing it (`cmake --install`) is enough; it used to be a git submodule pulled in with `add_subdirectory`, which is why older checkouts never had to find it.
 
 ```bash
 mkdir -p build && cd build

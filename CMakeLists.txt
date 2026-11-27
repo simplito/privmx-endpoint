@@ -227,13 +227,20 @@ if(PRIVMX_ENABLE_TESTS)
 endif()
 
 
-# pmx-crypto - docelowa biblioteka kryptograficzna, wciagana jako submodul.
-# While this library is under active co-development we use add_subdirectory rather than a Conan
-# recipe: it gives a faster iteration cycle. To be replaced by a Conan dependency eventually.
-# POSITION_INDEPENDENT_CODE is required — privmxcryptolib is STATIC, while the endpoint builds as
-# a shared library by default.
-add_subdirectory(pmx-crypto/library)
-set_target_properties(privmxcryptolib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# pmx-crypto — the cryptographic provider. A Conan dependency, no longer a git submodule built with
+# add_subdirectory: a checkout of this repository no longer carries its sources, and the version in
+# use is the one named in conanfile.txt rather than whatever commit the submodule pointer happened
+# to reference.
+#
+# The alias keeps the bare target name `privmxcryptolib` that crypto/, endpoint/core/ and the tests
+# link against, so moving between a source build and a package build changes nothing below this
+# line. fPIC is the package's own default option, which is what the POSITION_INDEPENDENT_CODE line
+# here used to have to set by hand on the subdirectory target.
+#
+# pmx-crypto requires C++20 (`check_min_cppstd`), so `conan install` must be given
+# `-s compiler.cppstd=20`; the default detected profile settles on gnu17 and is rejected.
+find_package(pmx-crypto REQUIRED)
+add_library(privmxcryptolib ALIAS pmx-crypto::privmxcryptolib)
 
 add_subdirectory(utils)
 add_subdirectory(crypto)
