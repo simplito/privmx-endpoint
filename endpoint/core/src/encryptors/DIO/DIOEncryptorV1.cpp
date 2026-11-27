@@ -26,10 +26,10 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     if (dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
-    // Pola przypisywane po konstrukcji, a nie lista inicjalizujaca: C++20 nie pozwala mieszac
-    // klauzul desygnowanych i pozycyjnych, a klasy bazowej (nosnika `version`) nie da sie
-    // desygnowac. Sama lista desygnowana dawalaby z kolei -Wmissing-field-initializers,
-    // co pod -Werror (PRIVMX_CI_WERROR) lamie build.
+    // Fields assigned after construction rather than through an initialiser list: C++20 does not
+    // allow mixing designated and positional clauses, and the base class (which carries `version`)
+    // cannot be designated. A purely designated list would in turn give
+    // -Wmissing-field-initializers, which breaks the build under -Werror (PRIVMX_CI_WERROR).
     dynamic::DataIntegrityObject dioJSON{};
     dioJSON.version = DataIntegrityObjectDataSchema::Version::VERSION_1;
     dioJSON.creatorUserId = dio.creatorUserId;

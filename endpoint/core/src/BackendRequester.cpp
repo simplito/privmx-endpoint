@@ -85,9 +85,9 @@ std::string BackendRequester::backendRequest(
         std::string nonce{utils::Base64::from(crypto::Crypto::randomBytes(16))};
         std::string dataToSign{timestamp + ";" + nonce + ";" + requestData}; //= `${timestamp};${nonce};${requestData}`;
 
-        // NIE przepinac na CryptoSuite: to jest podpis uwierzytelniajacy zadanie do Bridge'a,
-        // czyli kontrakt protokolu z serwerem, a nie format danych kontenera. Zmiana funkcji
-        // skrotu zerwalaby uwierzytelnianie.
+        // Do NOT move this onto CryptoSuite: this is the signature authenticating a request to the
+        // bridge — a protocol contract with the server, not a container data format. Changing the
+        // hash function would break authentication.
         auto signature = utils::Base64::from(crypto::Crypto::hmacSha256(apiKeySecret, dataToSign).substr(0, 20));
 
         std::vector<std::pair<std::string, std::string>> headers{};

@@ -24,40 +24,40 @@ namespace endpoint {
 namespace core {
 
 /**
- * @brief Tlumaczy wyjatki pmx-crypto na hierarchie wyjatkow endpointu.
+ * @brief Translates pmx-crypto exceptions into the endpoint's exception hierarchy.
  *
- * Dlaczego to w ogole musi istniec: `cryptoservice::Exception` dziedziczy po `std::exception`,
- * a nie po `privmx::utils::PrivmxException`. Cala granica publicznego API endpointu lapie
- * wylacznie `PrivmxException` i przepuszcza ja przez `ExceptionConverter`, wiec wyjatek
- * z pmx-crypto przeszedlby przez ta granice nietkniety - jako typ, ktorego zaden wrapper
- * (Java, Swift, JS) nie rozpoznaje.
+ * Why this has to exist at all: `cryptoservice::Exception` derives from `std::exception`, not from
+ * `privmx::utils::PrivmxException`. The whole public API boundary of the endpoint catches
+ * `PrivmxException` only and passes it through `ExceptionConverter`, so an exception from
+ * pmx-crypto would cross that boundary untouched — as a type no wrapper (Java, Swift, JS)
+ * recognises.
  *
- * Tlumaczymy u zrodla, a nie na granicy API, z dwoch powodow:
- *  - granica to ~250 blokow `catch` w kilkunastu plikach `*Api.cpp`,
- *  - tylko tutaj znamy kontekst wywolania (import klucza, weryfikacja, deszyfrowanie),
- *    a same wyjatki pmx-crypto nie niosa kodu (wszystkie maja `code == 0`).
+ * The translation happens at the source rather than at the API boundary, for two reasons:
+ *  - that boundary is some 250 `catch` blocks across a dozen or so `*Api.cpp` files,
+ *  - only here is the calling context known (key import, verification, decryption), and the
+ *    pmx-crypto exceptions carry no code of their own (every one has `code == 0`).
  *
- * Caly styk endpointu z pmx-crypto to pliki w `core/src/crypto/`, wiec opakowanie ich
- * wywolan domyka szczelnie ten zakres.
+ * The endpoint's entire contact surface with pmx-crypto is the files in `core/src/crypto/`, so
+ * wrapping their calls closes that scope tightly.
  */
 class CryptoErrors {
 public:
     /**
-     * Rzuca odpowiednik wyjatku pmx-crypto z hierarchii `endpoint::crypto::*`.
+     * Throws the `endpoint::crypto::*` counterpart of a pmx-crypto exception.
      *
-     * @param e wyjatek zlapany na styku z pmx-crypto
-     * @param context nazwa operacji endpointu, dopisywana do opisu
+     * @param e the exception caught at the pmx-crypto boundary
+     * @param context name of the endpoint operation, appended to the description
      */
     [[noreturn]] static void rethrow(const std::exception& e, const std::string& context);
 };
 
 /**
- * Wykonuje `fn`, tlumaczac wyjatki pmx-crypto. Zwraca to, co `fn`.
+ * Runs `fn`, translating pmx-crypto exceptions. Returns whatever `fn` returns.
  *
- * Lapiemy `std::exception`, a nie `cryptoservice::Exception`, bo pmx-crypto rzuca tez
- * goly `std::runtime_error` (`PrivmxDriverCryptoException` to jego alias). Wyjatki, ktore
- * juz naleza do hierarchii endpointu, przepuszczamy bez zmian - inaczej wlasna walidacja
- * wrapperow (np. `MalformedEncryptionKeyException` z pustego klucza) gubilaby swoj kod.
+ * It catches `std::exception` rather than `cryptoservice::Exception`, because pmx-crypto also
+ * throws a bare `std::runtime_error` (`PrivmxDriverCryptoException` is an alias for it). Exceptions
+ * that already belong to the endpoint's hierarchy pass through unchanged — otherwise the wrappers'
+ * own validation (say `MalformedEncryptionKeyException` from an empty key) would lose its code.
  */
 template<typename F>
 decltype(auto) mapCryptoErrors(const char* context, F&& fn) {
@@ -67,7 +67,7 @@ decltype(auto) mapCryptoErrors(const char* context, F&& fn) {
         throw;
     } catch (const std::exception& e) {
         CryptoErrors::rethrow(e, context);
-        throw; // nieosiagalne - `rethrow` jest [[noreturn]]; ucisza analize przeplywu
+        throw; // unreachable — `rethrow` is [[noreturn]]; this quiets flow analysis
     }
 }
 

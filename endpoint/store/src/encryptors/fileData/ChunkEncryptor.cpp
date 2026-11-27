@@ -24,14 +24,15 @@ IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const uint64_t index, const std::
 }
 
 bool ChunkEncryptor::hasHash(const std::string& chunkData, const std::string& hash) const {
-    // Gdzie w ramce lezy skrot, wie format - patrz `FileCipher::frameCarriesHash`.
+    // Where in the frame the hash sits is the format's business — see `FileCipher::frameCarriesHash`.
     return _cipher.frameCarriesHash(chunkData, hash);
 }
 
 std::string ChunkEncryptor::decrypt(const uint64_t index, const Chunk& chunk) {
-    // Dwa rozne bledy, bo wskazuja na co innego. Ten pierwszy znaczy, ze skrot z tablicy skrotow
-    // nie pasuje do ramki, czyli ze serwer podal chunk z innego miejsca pliku. Dopiero drugi,
-    // w `FileCipher`, znaczy, ze sama ramka jest naruszona.
+    // Two different errors, because they point at different things. The first means the hash from
+    // the hash table does not match the frame — that is, the server served a chunk from another
+    // part of the file. Only the second one, in `FileCipher`, means the frame itself was tampered
+    // with.
     if (!hasHash(chunk.data, chunk.hmac)) {
         throw FileChunkInvalidChecksumException();
     }

@@ -37,9 +37,9 @@ Poco::Dynamic::Var EventDataSchemaMapper::encrypt(
     auto toEncrypt = ContextEventDataToEncryptV5{
         ContextEventDataV5{.data = data, .type = type, .dio = _connection.getImpl()->createDIO(contextId, "")}
     };
-    // Zdarzenie kontekstowe nie nalezy do zadnego kontenera, wiec nie ma polityki, ktora mogla by
-    // wskazac zestaw algorytmow - klucz jest efemeryczny, generowany na to jedno zdarzenie.
-    // Zostaje zestaw domyslny dla buildu (poziom 1).
+    // A context event belongs to no container, so there is no policy that could name an algorithm
+    // suite — the key is ephemeral, generated for this one event. What remains is the build's
+    // default suite (level 1).
     return _encryptorV5.encrypt(toEncrypt, _userPrivKey, core::EncKey{.id = "", .key = key}).toJSON();
 }
 

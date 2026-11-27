@@ -21,7 +21,7 @@ using namespace privmx::endpoint::core;
 
 namespace {
 
-const std::string PLAINTEXT{"Wiadomosc testowa o dlugosci wiekszej niz jeden blok AES."};
+const std::string PLAINTEXT{"A test message longer than a single AES block."};
 
 std::string key32() {
     return CryptoSuite::defaultForWrite().randomBytes(32);
@@ -29,8 +29,8 @@ std::string key32() {
 
 } // namespace
 
-/// Testy przebiegaja po calym rejestrze, zamiast byc pisane per wariant - inaczej
-/// pokrycie zostaloby w tyle przy kazdym dodanym zestawie.
+/// The tests run over the whole registry instead of being written per variant — otherwise coverage
+/// would fall behind every time a suite is added.
 class CryptoSuiteAllSuites : public ::testing::TestWithParam<SuiteId> {};
 
 INSTANTIATE_TEST_SUITE_P(
@@ -48,7 +48,7 @@ TEST_P(CryptoSuiteAllSuites, RoundTrip) {
 
     const std::string framed = suite.encrypt(key, PLAINTEXT);
 
-    EXPECT_NE(framed.find(PLAINTEXT), 0u) << "dane nie moga byc widoczne jawnie";
+    EXPECT_NE(framed.find(PLAINTEXT), 0u) << "the data must not be visible in the clear";
     EXPECT_EQ(PLAINTEXT, CryptoSuite::decrypt(key, framed));
 }
 
@@ -60,7 +60,7 @@ TEST_P(CryptoSuiteAllSuites, FrameCarriesSuiteId) {
 }
 
 TEST_P(CryptoSuiteAllSuites, DecryptNeedsNoAlgorithmHint) {
-    // Sedno warstwy: odczyt dobiera zestaw z ramki, a nie z wiedzy wolajacego.
+    // The crux of this layer: reading takes the suite from the frame, not from what the caller knows.
     const auto suite = CryptoSuite::forId(GetParam());
     const std::string key = key32();
 
@@ -71,7 +71,7 @@ TEST_P(CryptoSuiteAllSuites, EncryptIsRandomized) {
     const auto suite = CryptoSuite::forId(GetParam());
     const std::string key = key32();
 
-    EXPECT_NE(suite.encrypt(key, PLAINTEXT), suite.encrypt(key, PLAINTEXT)) << "IV musi byc losowe";
+    EXPECT_NE(suite.encrypt(key, PLAINTEXT), suite.encrypt(key, PLAINTEXT)) << "the IV must be random";
 }
 
 TEST_P(CryptoSuiteAllSuites, TamperedCiphertextIsRejected) {
@@ -105,8 +105,8 @@ TEST_P(CryptoSuiteAllSuites, DeriveKeyIsDeterministic) {
     EXPECT_NE(suite.deriveKey("sekret", "etykieta", 32), suite.deriveKey("sekret", "inna", 32));
 }
 
-/// Podmiana znacznika zestawu na slabszy musi zostac wykryta - znacznik idzie jako AAD.
-/// To jest zabezpieczenie przed downgrade, ktorego nie ma stary bajt CipherType.
+/// Swapping the suite tag for a weaker one has to be detected — the tag goes in as AAD.
+/// This is the downgrade protection the old CipherType byte does not have.
 TEST(CryptoSuite, TamperedSuiteIdIsRejected) {
     const auto written = CryptoSuite::forId(SuiteId::Aes256GcmSha512);
     const std::string key = key32();
@@ -162,7 +162,7 @@ TEST_P(CryptoSuiteAllSuites, PolicyValueRoundTrip) {
     const std::string value = suite.policyValue();
 
     EXPECT_FALSE(value.empty());
-    // Limit wartosci polityki po stronie Bridge'a (TypesValidator: maxLength 32).
+    // The bridge's own cap on a policy value (TypesValidator: maxLength 32).
     EXPECT_LE(value.size(), 32u);
     EXPECT_TRUE(CryptoSuite::isKnownPolicyValue(value));
     EXPECT_EQ(GetParam(), CryptoSuite::forPolicyValue(value).id());

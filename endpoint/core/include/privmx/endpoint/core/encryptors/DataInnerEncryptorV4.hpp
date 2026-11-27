@@ -30,8 +30,8 @@ public:
 
     std::string encode(const core::Buffer& data);
     core::Buffer decode(const std::string& dataAsBase64);
-    // Zapis bierze zestaw algorytmow z klucza, odczyt ze znacznika w ramce - stad asymetria
-    // typow. Patrz `EncKey::suite`.
+    // Writing takes the algorithm suite from the key, reading from the frame's tag — hence the
+    // asymmetry in the types. See `EncKey::suite`.
     core::Buffer encrypt(const core::Buffer& data, const core::EncKey& encryptionKey);
     core::Buffer decrypt(const core::Buffer& privateData, const std::string& encryptionKey);
     core::Buffer signAndPackDataWithSignature(const core::Buffer& data, const core::PrivateKey& authorPrivateKey);

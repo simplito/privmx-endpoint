@@ -27,12 +27,12 @@ message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 option(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
-# Zestaw algorytmow uzywany do ZAPISU danych kontenerow. Nie ma wplywu na odczyt: rejestr
-# odczytu jest kompletny w kazdym buildzie, bo kazda ramka niesie wlasny znacznik zestawu.
-# Gdyby ta opcja zawezala takze odczyt, klienci zbudowani roznymi wartosciami przestaliby
-# czytac nawzajem swoje dane.
+# The algorithm suite used for WRITING container data. It has no effect on reading: the read
+# registry is complete in every build, because every frame carries its own suite tag. Were this
+# option to narrow reading too, clients built with different values would stop being able to read
+# each other's data.
 #
-# Nazwy odpowiadaja wartosciom pola `cryptoSuite` w polityce kontenera (`CryptoSuite::policyValue`).
+# The names match the values of the `cryptoSuite` field in a container's policy (`CryptoSuite::policyValue`).
 set(PRIVMX_DEFAULT_CRYPTO_SUITE "aes256gcm-sha256" CACHE STRING "Crypto suite used for writing container data")
 set_property(CACHE PRIVMX_DEFAULT_CRYPTO_SUITE PROPERTY STRINGS "aes256gcm-sha256" "aes256gcm-sha512")
 
@@ -77,13 +77,13 @@ else()
 endif()
 message(STATUS "Identity key algorithm - PRIVMX_DEFAULT_KEY_ALGORITHM=${PRIVMX_DEFAULT_KEY_ALGORITHM} (tag ${PRIVMX_DEFAULT_KEY_ALGORITHM_TAG})")
 
-# Format danych pliku w `store`, uzywany do ZAPISU nowych plikow. Celowo osobna os niz
-# PRIVMX_DEFAULT_CRYPTO_SUITE: zestawy kontenerow roznia sie haszem, a formaty plikow trybem
-# szyfru, wiec jedno nie wynika z drugiego. Rozdzielenie pozwala tez na migracje po kawalku -
-# nowe kontenery przy starym formacie plikow i odwrotnie.
+# The file data format in `store`, used for WRITING new files. Deliberately a separate axis from
+# PRIVMX_DEFAULT_CRYPTO_SUITE: container suites differ in their hash, file formats in their cipher
+# mode, so neither follows from the other. Keeping them apart also allows a piecemeal migration —
+# new containers with the old file format, and the other way round.
 #
-# Odczyt jest kompletny niezaleznie od tej wartosci: `cipherType` kazdego pliku siedzi w jego
-# wewnetrznym meta i to po nim dobierany jest format.
+# Reading is complete whatever this value is: every file's `cipherType` sits in its own internal
+# meta, and the format is chosen from that.
 set(PRIVMX_DEFAULT_FILE_CIPHER "aes256cbc-hmac-sha256" CACHE STRING "File data format used for writing new files")
 set_property(CACHE PRIVMX_DEFAULT_FILE_CIPHER PROPERTY STRINGS
     "aes256cbc-hmac-sha256" "aes256gcm" "aes256gcm-sha512")
@@ -163,7 +163,7 @@ if(PRIVMX_IMPORTED_LIBRARIES)
         set_property(TARGET readline PROPERTY IMPORTED_LOCATION ${PRIVMX_CLI_READLINE})
         include_directories(${PRIVMX_CLI_READLINE_INCLUDES})
     endif(PRIVMX_BUILD_CLI AND PRIVMX_CLI_READLINE)
-    # Wtyczek kryptograficznych juz nie wciagamy - cala kryptografia idzie przez pmx-crypto.
+    # No crypto plugins are pulled in any more — all cryptography goes through pmx-crypto.
     if(PRIVMX_DRVNET)
         add_library(privmxdrvnet SHARED IMPORTED GLOBAL)
         set_property(TARGET privmxdrvnet PROPERTY IMPORTED_LOCATION ${PRIVMX_DRVNET})
@@ -202,8 +202,8 @@ if(PRIVMX_CONAN)
     add_library(Pson ALIAS pson::Pson)
     find_package(gmp REQUIRED)
     add_library(gmp ALIAS gmp::gmp)
-    # Kryptografia idzie w calosci przez pmx-crypto (crypto/pmxcrypto) - zadnych wtyczek.
-    # Z privmxdrv* zostaje wylacznie siec.
+    # Cryptography goes entirely through pmx-crypto (crypto/pmxcrypto) — no plugins.
+    # Of the privmxdrv* drivers only networking remains.
     if(PRIVMX_DRIVER_NET)
         find_package(privmxdrvnet REQUIRED)
         add_library(privmxdrvnet ALIAS privmxdrvnet::privmxdrvnet)
@@ -228,10 +228,10 @@ endif()
 
 
 # pmx-crypto - docelowa biblioteka kryptograficzna, wciagana jako submodul.
-# Na czas aktywnej wspolpracy z ta biblioteka uzywamy add_subdirectory zamiast receptury
-# Conan: daje szybszy cykl iteracji. Docelowo do zamiany na zaleznosc conanowa.
-# POSITION_INDEPENDENT_CODE jest konieczne - privmxcryptolib jest STATIC, a endpoint
-# domyslnie buduje sie jako biblioteka wspoldzielona.
+# While this library is under active co-development we use add_subdirectory rather than a Conan
+# recipe: it gives a faster iteration cycle. To be replaced by a Conan dependency eventually.
+# POSITION_INDEPENDENT_CODE is required — privmxcryptolib is STATIC, while the endpoint builds as
+# a shared library by default.
 add_subdirectory(pmx-crypto/library)
 set_target_properties(privmxcryptolib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

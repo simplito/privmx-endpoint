@@ -15,6 +15,6 @@ using namespace privmx;
 using namespace privmx::crypto;
 using namespace std;
 
-// Sciezka do certyfikatow CA dla TLS - ustawiana przez endpoint::core::Config,
-// czytana przez warstwe HTTP w rpc/poco.
+// Path to the CA certificates for TLS — set by endpoint::core::Config,
+// read by the HTTP layer in rpc/poco.
 string OpenSSLUtils::CaLocation{};

@@ -25,7 +25,7 @@ std::shared_ptr<Logger> Logger::getInstance() {
 }
 
 void Logger::freeInstance() {
-    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    // The marker is checked before the slot is touched — see SingletonSlot.
     if(!privmx::utils::SingletonSlot<Logger>::alive()) {
         return;
     }

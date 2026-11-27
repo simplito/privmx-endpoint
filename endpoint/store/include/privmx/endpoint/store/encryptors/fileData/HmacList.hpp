@@ -25,7 +25,7 @@ namespace store {
 
 class HmacList : public IHashList {
 public:
-    /// Krok tablicy i skrot wierzcholkowy pochodza z formatu pliku, nie ze stalej - patrz `FileCipher`.
+    /// The table stride and the top hash come from the file format, not from a constant — see `FileCipher`.
     HmacList(
         const std::string& topHashKey,
         const std::string& topHash,

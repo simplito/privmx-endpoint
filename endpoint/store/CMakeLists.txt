@@ -12,7 +12,7 @@ target_compile_options(privmxendpointstore PRIVATE -fPIC -Wall -Wextra -Wno-narr
 # MINIMAL_BUILD trafia tu razem z reszta, bo `set_target_properties(... COMPILE_DEFINITIONS ...)`
 # nadpisuje cala wlasciwosc i kasowalo definicje dodane wczesniej. `target_compile_definitions` dokleja.
 #
-# PRIVMX_DEFAULT_FILE_CIPHER_ID: format zapisu danych pliku. Patrz glowny CMakeLists.
+# PRIVMX_DEFAULT_FILE_CIPHER_ID: the write format for file data. See the top-level CMakeLists.
 target_compile_definitions(privmxendpointstore
     PRIVATE MINIMAL_BUILD
     PRIVATE PRIVMX_DEFAULT_FILE_CIPHER_ID=${PRIVMX_DEFAULT_FILE_CIPHER_ID})

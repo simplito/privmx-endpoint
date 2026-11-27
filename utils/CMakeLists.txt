@@ -46,7 +46,7 @@ file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp ${CMAKE_CURRENT_
 add_library(privmxutils OBJECT ${SOURCES})
 target_include_directories(privmxutils PUBLIC ${INCLUDE_DIRS})
 target_compile_options(privmxutils PRIVATE -fPIC -Wall -Wextra -Wno-narrowing)
-# gmp jest tu przez Base58 (arytmetyka wielkich liczb). Przyszlo razem z nim z modulu `crypto/`.
+# gmp is here because of Base58 (big-number arithmetic). It came along with it from the `crypto/` module.
 target_link_libraries(privmxutils PUBLIC Poco::Foundation Poco::JSON Pson gmp)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxutils PROPERTIES POSITION_INDEPENDENT_CODE True)

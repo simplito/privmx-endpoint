@@ -19,11 +19,11 @@ namespace endpoint {
 namespace core {
 
 /**
- * @brief Dostep do providera kryptograficznego pmx-crypto.
+ * @brief Access to the pmx-crypto cryptographic provider.
  *
- * Rejestruje provider leniwie i jednokrotnie. Jest to konieczne, bo
- * `CryptoProviderRegistry::get()` dereferencuje wskaznik bez sprawdzenia `nullptr`,
- * a sam rejestr nie ma synchronizacji - endpoint zas pracuje na puli watkow.
+ * Registers the provider lazily and exactly once. That is necessary because
+ * `CryptoProviderRegistry::get()` dereferences a pointer without a `nullptr` check, and the
+ * registry itself has no synchronisation — while the endpoint works on a thread pool.
  */
 privmx::cryptoservice::ICryptoProvider& cryptoProvider();
 

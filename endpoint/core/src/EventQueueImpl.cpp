@@ -27,7 +27,7 @@ std::shared_ptr<EventQueueImpl> EventQueueImpl::getInstance() {
 }
 
 void EventQueueImpl::freeInstance() {
-    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    // The marker is checked before the slot is touched — see SingletonSlot.
     if (!privmx::utils::SingletonSlot<EventQueueImpl>::alive()) {
         return;
     }

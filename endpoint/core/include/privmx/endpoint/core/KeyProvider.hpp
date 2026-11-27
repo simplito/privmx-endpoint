@@ -79,11 +79,11 @@ public:
 
     KeyProvider(const core::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
     /**
-     * @brief Nowy klucz kontenera dla podanego zestawu algorytmow.
+     * @brief A new container key for the given algorithm suite.
      *
-     * Dlugosc klucza bierze sie z zestawu, a nie ze stalej, i zestaw zostaje na kluczu zapisany -
-     * dzieki temu niezmiennik "klucz ma dlugosc wymagana przez swoj zestaw" zachodzi z konstrukcji,
-     * a nie przez zbieg okolicznosci, ze oba dzisiejsze zestawy chca 32 bajtow.
+     * The key length comes from the suite rather than from a constant, and the suite is recorded on
+     * the key — so the invariant "a key is as long as its suite requires" holds by construction,
+     * and not by the coincidence that both of today's suites want 32 bytes.
      */
     EncKey generateKey(const CryptoSuite& suite);
     std::string generateSecret();

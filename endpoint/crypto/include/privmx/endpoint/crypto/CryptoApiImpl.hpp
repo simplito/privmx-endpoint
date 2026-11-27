@@ -38,7 +38,7 @@ public:
     std::string convertPGPAsn1KeyToBase58DERKey(const std::string& keyPGP);
 
 private:
-    /// Zwraca klucz w formacie WIF - uzasadnienie przy definicji.
+    /// Returns the key in WIF format — the reasoning is at the definition.
     std::string getPrivKeyFromSeed(const std::string& seed, size_t rounds);
 };
 

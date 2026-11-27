@@ -9,17 +9,17 @@ else()
 endif()
 target_include_directories(privmxendpointcore PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointcore PRIVATE -fPIC -Wall -Wextra)
-# MINIMAL_BUILD bylo tu ustawiane przez `set_target_properties(... COMPILE_DEFINITIONS ...)`, ktore
-# **nadpisuje** cala wlasciwosc - kazda definicja dodana wczesniej przez `target_compile_definitions`
-# cicho znikala. `target_compile_definitions` dokleja, wiec kolejnosc przestaje mie znaczenie.
+# MINIMAL_BUILD used to be set here by `set_target_properties(... COMPILE_DEFINITIONS ...)`, which
+# **overwrites** the whole property — every definition added earlier by `target_compile_definitions`
+# silently vanished. `target_compile_definitions` appends, so ordering no longer matters.
 #
-# PRIVMX_DEFAULT_CRYPTO_SUITE_ID: wybor zestawu zapisu (poziom 1). Patrz glowny CMakeLists.
+# PRIVMX_DEFAULT_CRYPTO_SUITE_ID: the write-suite choice (level 1). See the top-level CMakeLists.
 target_compile_definitions(privmxendpointcore
     PRIVATE MINIMAL_BUILD
     PRIVATE PRIVMX_DEFAULT_CRYPTO_SUITE_ID=${PRIVMX_DEFAULT_CRYPTO_SUITE_ID}
     PRIVATE PRIVMX_DEFAULT_KEY_ALGORITHM_TAG=${PRIVMX_DEFAULT_KEY_ALGORITHM_TAG})
-# privmxcryptolib jest PUBLIC, bo publiczne naglowki core (crypto/PrivateKey.hpp i spokrewnione)
-# wystawiaja typy z pmx-crypto - konsumenci potrzebuja jego sciezek include.
+# privmxcryptolib is PUBLIC because core's public headers (crypto/PrivateKey.hpp and relatives)
+# expose pmx-crypto types — consumers need its include paths.
 target_link_libraries(privmxendpointcore PRIVATE Poco::Foundation privmx PUBLIC privmxcryptolib)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxendpointcore PROPERTIES POSITION_INDEPENDENT_CODE True)

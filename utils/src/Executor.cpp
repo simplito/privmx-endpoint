@@ -26,7 +26,7 @@ std::shared_ptr<Executor> Executor::getInstance() {
 }
 
 void Executor::freeInstance() {
-    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    // The marker is checked before the slot is touched — see SingletonSlot.
     if(!privmx::utils::SingletonSlot<Executor>::alive()) {
         return;
     }

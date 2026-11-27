@@ -63,8 +63,8 @@ public:
     virtual std::string encrypt(const T& data, const std::string& key) = 0; // base64
     virtual std::string encrypt(const T& data, const EncKey& encKey) = 0;
 
-    // Przeciazenie z golym kluczem zapisuje zestawem domyslnym dla buildu (poziom 1); przeciazenie
-    // z `EncKey` - zestawem przypisanym do kontenera (poziom 2). Patrz `EncKey::suite`.
+    // The raw-key overload writes with the build's default suite (level 1); the `EncKey` overload
+    // with the suite assigned to the container (level 2). See `EncKey::suite`.
     std::string signAndEncrypt(const T& data, const core::PrivateKey& privKey, const std::string& key) {
         return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, sign(data, privKey)));
     }

@@ -44,8 +44,8 @@ protected:
     EventQueueImpl() {};
 
 private:
-    // Uchwyt instancji mieszka w `SingletonSlot` w pliku zrodlowym, a nie tutaj - patrz
-    // privmx/utils/SingletonSlot.hpp po powod (kolejnosc niszczenia statykow).
+    // The instance handle lives in a `SingletonSlot` in the source file rather than here — see
+    // privmx/utils/SingletonSlot.hpp for why (static destruction order).
 
     class Notification : public Poco::Notification {
     public:

@@ -23,7 +23,7 @@ namespace store {
 
 class ChunkEncryptor : public IChunkEncryptor {
 public:
-    /// Format domyslny dla zapisu; przy odczycie nalezy podac ten, ktory niesie meta pliku.
+    /// The default format for writing; when reading, pass the one the file's meta carries.
     ChunkEncryptor(std::string key, size_t chunkSize, FileCipher cipher = FileCipher::defaultForWrite());
     IChunkEncryptor::Chunk encrypt(const uint64_t index, const std::string& data) override;
     std::string decrypt(const uint64_t index, const Chunk& chunk) override;

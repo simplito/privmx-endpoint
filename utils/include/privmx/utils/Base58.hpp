@@ -19,20 +19,20 @@ namespace privmx {
 namespace utils {
 
 /**
- * @brief Kodowanie Base58 oraz Base58Check.
+ * @brief Base58 and Base58Check encoding.
  *
- * **Czemu funkcja haszujaca przychodzi z zewnatrz.** Base58Check liczy sume kontrolna jako
- * `sha256(sha256(payload))[0..4)`. `utils` lezy ponizej warstwy kryptograficznej i nie moze jej
- * wolac - wczesniej rozwiazywano to tak, ze cala klasa mieszkala w module `crypto/`, a w `utils`
- * stal naglowek przekierowujacy z komentarzem o cyklicznej zaleznosci. Wstrzykniecie funkcji
- * zrywa ten cykl i pozwala modulowi `crypto/` zniknac.
+ * **Why the hash function is injected.** Base58Check computes its checksum as
+ * `sha256(sha256(payload))[0..4)`. `utils` sits below the cryptographic layer and cannot call into
+ * it — the previous answer to that was to keep the whole class in the `crypto/` module and leave a
+ * forwarding header in `utils` with a comment about the circular dependency. Injecting the function
+ * breaks the cycle and lets the `crypto/` module go away.
  *
- * To **nie jest** miejsce na wybor algorytmu: SHA-256 jest wpisany w definicje Base58Check,
- * wiec wolajacy ma podac SHA-256, a nie "swoj aktualny hasz".
+ * This is **not** a place to choose an algorithm: SHA-256 is written into the definition of
+ * Base58Check, so the caller is to pass SHA-256, not "whatever hash they currently use".
  */
 class Base58 {
 public:
-    /// Liczy SHA-256 z podanych danych.
+    /// Computes SHA-256 of the given data.
     using Sha256 = std::function<std::string(const std::string&)>;
 
     static std::string encode(const std::string& s);
@@ -42,7 +42,7 @@ public:
     static std::string encodeWithChecksum(const std::string& s, const Sha256& sha256);
 
     /**
-     * @throws PrivmxException gdy suma kontrolna sie nie zgadza
+     * @throws PrivmxException when the checksum does not match
      */
     static std::string decodeWithChecksum(const std::string& s, const Sha256& sha256);
 

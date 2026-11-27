@@ -37,35 +37,36 @@ std::string someFrame() {
 } // namespace
 
 // -------------------------------------------------------------------------------------------
-// Warunek konieczny calej warstwy: zaden wyjatek pmx-crypto nie moze wyjsc poza nia w swojej
-// postaci. Granica publicznego API lapie tylko `PrivmxException`, wiec wyjatek, ktory nie jest
-// `core::Exception`, przeszedlby przez nia jako typ nieznany zadnemu wrapperowi.
+// A necessary condition for the whole layer: no pmx-crypto exception may leave it in its own form.
+// The public API boundary catches `PrivmxException` only, so an exception that is not a
+// `core::Exception` would cross it as a type no wrapper recognises.
 // -------------------------------------------------------------------------------------------
 
 TEST(CryptoErrors, EveryFailurePathProducesCoreException) {
     const std::vector<std::pair<const char*, std::function<void()>>> cases{
-        {"fromWIF/smiec", [] { PrivateKey::fromWIF("to-nie-jest-wif"); }},
-        {"fromWIF/krotki", [] { PrivateKey::fromWIF("5"); }},
-        {"fromWIF/zla suma", [] { PrivateKey::fromWIF("L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a6"); }},
-        {"fromBase58DER/smiec", [] { PublicKey::fromBase58DER("to-nie-jest-klucz"); }},
-        {"fromBase58DER/pusty", [] { PublicKey::fromBase58DER(""); }},
-        {"fromDER/zla dlugosc", [] { PublicKey::fromDER(std::string(10, '\0')); }},
-        {"fromRaw/za krotki", [] { PrivateKey::fromRaw("abc"); }},
-        {"encrypt/krotki klucz", [] { CryptoSuite::defaultForWrite().encrypt("krotki", "tresc"); }},
-        {"decrypt/zly klucz", [] { CryptoSuite::decrypt(std::string(32, 'z'), someFrame()); }},
-        {"decrypt/pusta ramka", [] { CryptoSuite::decrypt(KEY32, ""); }},
-        {"ecies/nie ten klucz", [] {
+        {"fromWIF/garbage", [] { PrivateKey::fromWIF("this-is-not-a-wif"); }},
+        {"fromWIF/short", [] { PrivateKey::fromWIF("5"); }},
+        {"fromWIF/bad checksum",
+         [] { PrivateKey::fromWIF("L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a6"); }},
+        {"fromBase58DER/garbage", [] { PublicKey::fromBase58DER("this-is-not-a-key"); }},
+        {"fromBase58DER/empty", [] { PublicKey::fromBase58DER(""); }},
+        {"fromDER/wrong length", [] { PublicKey::fromDER(std::string(10, '\0')); }},
+        {"fromRaw/too short", [] { PrivateKey::fromRaw("abc"); }},
+        {"encrypt/short key", [] { CryptoSuite::defaultForWrite().encrypt("short", "content"); }},
+        {"decrypt/wrong key", [] { CryptoSuite::decrypt(std::string(32, 'z'), someFrame()); }},
+        {"decrypt/empty frame", [] { CryptoSuite::decrypt(KEY32, ""); }},
+        {"ecies/wrong key", [] {
              const auto a = PrivateKey::fromWIF(WIF);
-             Ecies::decrypt(PrivateKey::generateRandom(), Ecies::encrypt(a.getPublicKey(), "tresc", a));
+             Ecies::decrypt(PrivateKey::generateRandom(), Ecies::encrypt(a.getPublicKey(), "content", a));
          }},
     };
 
     for (const auto& [name, action] : cases) {
         try {
             action();
-            ADD_FAILURE() << name << ": oczekiwano wyjatku, nie bylo zadnego";
+            ADD_FAILURE() << name << ": expected an exception, got none";
         } catch (const Exception& e) { EXPECT_NE(0u, e.getCode()) << name; } catch (const std::exception& e) {
-            ADD_FAILURE() << name << ": wyjatek wyszedl poza hierarchie endpointu: " << e.what();
+            ADD_FAILURE() << name << ": the exception escaped the endpoint hierarchy: " << e.what();
         }
     }
 
@@ -74,20 +75,21 @@ TEST(CryptoErrors, EveryFailurePathProducesCoreException) {
     // hold either way is that garbage is not accepted, so that is what this asserts.
     try {
         EXPECT_FALSE(PrivateKey::fromWIF(WIF).getPublicKey().verifyCompactSignatureWithHash("m", "xx"))
-            << "verify/smiec jako podpis: smiec przyjety jako podpis";
+            << "verify/garbage as a signature: garbage accepted as a signature";
     } catch (const Exception& e) {
-        EXPECT_NE(0u, e.getCode()) << "verify/smiec jako podpis";
+        EXPECT_NE(0u, e.getCode()) << "verify/garbage as a signature";
     } catch (const std::exception& e) {
-        ADD_FAILURE() << "verify/smiec jako podpis: wyjatek wyszedl poza hierarchie endpointu: " << e.what();
+        ADD_FAILURE() << "verify/garbage as a signature: the exception escaped the endpoint hierarchy: " << e.what();
     }
 }
 
 // -------------------------------------------------------------------------------------------
-// Konkretne odwzorowania. Te kody byly w API przed migracja - wrappery moga na nie reagowac.
+// The specific mappings. These codes were in the API before the migration — wrappers may react
+// to them.
 // -------------------------------------------------------------------------------------------
 
-/// Nieudane uwierzytelnienie AEAD. Pulapka: pmx-crypto zglasza ten przypadek jako
-/// `DecryptionFinalizationFailed`, a nie jako `DecryptionInvalidTag`.
+/// A failed AEAD authentication. The trap: pmx-crypto reports this case as
+/// `DecryptionFinalizationFailed`, not as `DecryptionInvalidTag`.
 TEST(CryptoErrors, AuthenticationFailureKeepsItsOwnCode) {
     EXPECT_THROW(CryptoSuite::decrypt(std::string(32, 'z'), someFrame()), epcrypto::WrongMessageSecurityTagException);
 
@@ -108,7 +110,7 @@ TEST(CryptoErrors, UnknownSuiteTagIsReportedAsSuchNotAsCipherFailure) {
     EXPECT_THROW(CryptoSuite::decrypt(KEY32, framed), UnknownCryptoSuiteException);
 }
 
-/// Wyjatki wlasne wrapperow musza przechodzic przez mapper bez zmiany kodu.
+/// The wrappers' own exceptions must pass through the mapper without their code changing.
 TEST(CryptoErrors, EndpointOwnExceptionsPassThroughUnchanged) {
     EXPECT_THROW(PublicKey().toBase58DER(), MalformedEncryptionKeyException);
     EXPECT_THROW(PrivateKey().toWIF(), MalformedEncryptionKeyException);
@@ -117,11 +119,11 @@ TEST(CryptoErrors, EndpointOwnExceptionsPassThroughUnchanged) {
 }
 
 // -------------------------------------------------------------------------------------------
-// Dlugosc klucza symetrycznego.
+// Symmetric key length.
 //
-// To nie jest kontrola kurtuazyjna: `CryptoProvider` przekazuje `key.data()` do OpenSSL
-// nie patrzac na `key.size()`, a OpenSSL czyta tyle bajtow, ile wymaga szyfr. Bez tego
-// warunku krotszy klucz daje odczyt poza buforem zamiast bledu.
+// This is not a courtesy check: `CryptoProvider` passes `key.data()` to OpenSSL without looking at
+// `key.size()`, and OpenSSL reads as many bytes as the cipher requires. Without this condition a
+// shorter key gives a read past the end of the buffer rather than an error.
 // -------------------------------------------------------------------------------------------
 
 TEST(CryptoErrors, ShortKeyIsRejectedInsteadOfBeingReadPastItsEnd) {

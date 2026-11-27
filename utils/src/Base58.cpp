@@ -58,14 +58,14 @@ string Base58::encodeWithChecksum(const string& s, const Sha256& sha256) {
 }
 
 string Base58::decodeWithChecksum(const string& s, const Sha256& sha256) {
-    // Puste wejscie trzeba odrzucic przed `decode`, bo GMP rzuca z niego `std::invalid_argument`,
-    // czyli wyjatek spoza hierarchii biblioteki.
+    // Empty input has to be refused before `decode`, because GMP throws `std::invalid_argument`
+    // from it — an exception outside this library's hierarchy.
     if (s.empty()) {
         throw PrivmxException("Invalid base58 checksum");
     }
     string data = decode(s);
-    // Bez tego krotsze wejscie dawalo `data.length() - 4` z przekreceniem licznika i `substr`
-    // liczony od wartosci bliskiej zakresowi `size_t`.
+    // Without this, shorter input made `data.length() - 4` wrap around, and `substr` was counted
+    // from a value near the top of the `size_t` range.
     if (data.length() < 4) {
         throw PrivmxException("Invalid base58 checksum");
     }

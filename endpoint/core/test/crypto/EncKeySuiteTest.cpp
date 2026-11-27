@@ -26,25 +26,25 @@ using namespace privmx::endpoint::core;
 namespace {
 
 const std::string KEY32(32, 'k');
-const std::string PLAIN{"tresc kontenera"};
+const std::string PLAIN{"container contents"};
 
-/// Zestaw inny niz domyslny dla buildu - potrzebny, zeby test odroznil "wzielo z klucza"
-/// od "wzielo stala".
+/// A suite other than this build's default — needed so the test can tell "took it from the key"
+/// apart from "took a constant".
 CryptoSuite nonDefaultSuite() {
     for (const SuiteId id : CryptoSuite::known()) {
         if (id != CryptoSuite::defaultForWrite().id()) {
             return CryptoSuite::forId(id);
         }
     }
-    throw std::logic_error("rejestr ma tylko jeden zestaw - tego testu nie da sie przeprowadzic");
+    throw std::logic_error("the registry holds only one suite — this test cannot be run");
 }
 
 } // namespace
 
 // ---------------------------------------------------------------------------------------------
-// `EncKey::suite` jest nosnikiem wyboru zestawu z polityki kontenera (poziom 2). Te testy
-// pilnuja jedynej wlasnosci, ktora sie liczy: ze zestaw przypisany do klucza faktycznie laduje
-// w danych, a nie jest po drodze gubiony na rzecz stalej kompilacji.
+// `EncKey::suite` carries the suite choice taken from the container's policy (level 2). These
+// tests guard the one property that matters: that the suite attached to a key really does land in
+// the data, and is not dropped along the way in favour of a compile-time constant.
 // ---------------------------------------------------------------------------------------------
 
 TEST(EncKeySuite, DefaultsToBuildWriteSuite) {
@@ -61,7 +61,7 @@ TEST(EncKeySuite, InnerEncryptorWritesWithSuiteFromKey) {
     const std::string framed = encryptor.encrypt(Buffer::from(PLAIN), encKey).stdString();
 
     EXPECT_EQ(other.id(), CryptoSuite::readSuiteId(framed));
-    // Odczyt idzie za znacznikiem z ramki, wiec nie potrzebuje wiedziec, czym zapisano.
+    // Reading follows the frame's own tag, so it need not know what the data was written with.
     EXPECT_EQ(PLAIN, encryptor.decrypt(Buffer::from(framed), encKey.key).stdString());
 }
 
@@ -86,9 +86,9 @@ TEST(EncKeySuite, DataEncryptorWritesWithSuiteFromKey) {
     EXPECT_EQ(PLAIN, std::string(encryptor.decrypt(base64, encKey)));
 }
 
-/// Przeciazenie z golym kluczem nie ma skad wziac zestawu, wiec musi uzyc domyslnego - takze
-/// wtedy, gdy obok istnieje `EncKey` z innym. Inaczej "zapisz tym kluczem" znaczyloby co innego
-/// w zaleznosci od tego, ktore przeciazenie trafi sie wolajacemu.
+/// The raw-key overload has nowhere to take a suite from, so it must use the default — including
+/// when an `EncKey` naming another one exists alongside. Otherwise "write with this key" would mean
+/// different things depending on which overload the caller happened to reach.
 TEST(EncKeySuite, RawKeyOverloadAlwaysUsesDefault) {
     DataEncryptor<Pson::BinaryString> encryptor;
 
@@ -98,9 +98,8 @@ TEST(EncKeySuite, RawKeyOverloadAlwaysUsesDefault) {
     EXPECT_EQ(CryptoSuite::defaultForWrite().id(), CryptoSuite::readSuiteId(framed));
 }
 
-/// Dane zapisane jednym zestawem musza byc czytelne dla kazdego klucza o tej samej wartosci,
-/// niezaleznie od tego, jaki zestaw niesie `EncKey` uzyty do odczytu. To jest wlasnie powod,
-/// dla ktorego `suite` dotyczy wylacznie zapisu.
+/// Data written with one suite must be readable by any key of the same value, whatever suite the
+/// `EncKey` used for reading happens to carry. That is precisely why `suite` concerns writing only.
 TEST(EncKeySuite, ReadIgnoresSuiteOnTheKeyAndFollowsTheFrame) {
     const CryptoSuite other = nonDefaultSuite();
     DataEncryptor<Pson::BinaryString> encryptor;
@@ -114,9 +113,9 @@ TEST(EncKeySuite, ReadIgnoresSuiteOnTheKeyAndFollowsTheFrame) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Niezmiennik: swiezo wygenerowany klucz ma dlugosc wymagana przez swoj zestaw. Przed zmiana
-// `generateKey` zwracal zawsze 32 bajty, co bylo poprawne tylko dlatego, ze oba dzisiejsze
-// zestawy akurat tyle chca.
+// The invariant: a freshly generated key is as long as its suite requires. Before the change
+// `generateKey` always returned 32 bytes, which was correct only because both of today's suites
+// happen to want exactly that.
 // ---------------------------------------------------------------------------------------------
 
 TEST(EncKeySuite, GeneratedKeyMatchesItsSuite) {
@@ -129,8 +128,8 @@ TEST(EncKeySuite, GeneratedKeyMatchesItsSuite) {
         EXPECT_EQ(suite.id(), key.suite.id());
         EXPECT_EQ(suite.keyLength(), key.key.size());
         EXPECT_FALSE(key.id.empty());
-        // Klucz musi dac sie od razu uzyc swoim wlasnym zestawem - to lapie rozjazd miedzy
-        // `keyLength()` a tym, co faktycznie wygenerowano.
+        // The key must be immediately usable with its own suite — this catches a drift between
+        // `keyLength()` and what was actually generated.
         EXPECT_NO_THROW(suite.encrypt(key.key, PLAIN));
     }
 }

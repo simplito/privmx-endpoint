@@ -66,9 +66,9 @@ void ConnectionImpl::connect(
         .instanceId = verificationOptions.bridgeInstanceId
     };
     auto key = core::PrivateKey::fromWIF(userPrivKey);
-    // Granica z warstwa sieciowa: `privfs`/`rpc` nadal operuja na `privmx::crypto`, bo ich migracja
-    // jest osobnym zadaniem. Konwersja przez WIF kosztuje jedno parsowanie na polaczenie.
-    // Do usuniecia, gdy warstwa sieciowa przejdzie na pmx-crypto.
+    // The boundary with the network layer: `privfs`/`rpc` still work on `privmx::crypto`, because
+    // migrating them is a separate task. Converting through a WIF costs one parse per connection.
+    // To be removed once the network layer moves to pmx-crypto.
     //
     // An identity that cannot agree keys cannot be the key the channel runs on, so the two roles come
     // apart: a throwaway secp256k1 key carries the channel, and the identity only signs. The signature
@@ -187,7 +187,7 @@ void ConnectionImpl::connectPublic(
     _isAnonymous = true;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
-    // Granica z warstwa sieciowa - patrz uwaga przy `createGatewayFromEcdhexConnection`.
+    // The boundary with the network layer — see the note at `createGatewayFromEcdhexConnection`.
     //
     // The same split of roles as in `connect()`: an identity that cannot agree keys cannot be the key
     // the channel runs on. Here the identity is throwaway anyway and there is nobody to prove it to,

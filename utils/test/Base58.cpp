@@ -10,9 +10,9 @@ limitations under the License.
 */
 
 /**
- * Base58 trafil tu z modulu `crypto/`, a przy przeprowadzce zmienil API: warianty z suma
- * kontrolna dostaja funkcje haszujaca z zewnatrz, bo `utils` nie moze wolac kryptografii.
- * Te testy sprawdzaja, ze samo kodowanie sie przy tym nie zmienilo.
+ * Base58 arrived here from the `crypto/` module, and changed its API on the way: the
+ * checksummed variants take their hash function from outside, because `utils` cannot call into
+ * cryptography. These tests check that the encoding itself did not change along with it.
  */
 
 #include <string>
@@ -26,9 +26,9 @@ using privmx::utils::Base58;
 
 namespace {
 
-/// SHA-256 na potrzeby testu - staly wektor, zeby nie wciagac tu kryptografii.
-/// Nie liczy prawdziwego SHA-256; sprawdzamy wylacznie, ze suma kontrolna jest liczona
-/// **ta podana** funkcja i ze jej wynik faktycznie decyduje o odrzuceniu danych.
+/// A stand-in SHA-256 for the test — a fixed function, so that cryptography is not pulled in here.
+/// It does not compute a real SHA-256; all that is checked is that the checksum is computed with
+/// **the function given** and that its result really decides whether data is rejected.
 std::string fakeSha256(const std::string& data) {
     std::string out(32, '\0');
     for (std::size_t i = 0; i < data.size(); ++i) {
@@ -38,13 +38,13 @@ std::string fakeSha256(const std::string& data) {
 }
 
 std::string otherSha256(const std::string& data) {
-    return fakeSha256(data + "inna");
+    return fakeSha256(data + "other");
 }
 
 } // namespace
 
 // ---------------------------------------------------------------------------------------------
-// Samo kodowanie - bez kryptografii.
+// The encoding itself — no cryptography.
 // ---------------------------------------------------------------------------------------------
 
 TEST(Base58Test, KnownVectors) {
@@ -60,15 +60,15 @@ TEST(Base58Test, RoundTrip) {
 }
 
 /**
- * Wejscie zlozone z samych zer nie przechodzi obrotu: `encode("")` daje "1", a `decode("1")`
- * daje bajt zerowy. Zrodlem jest liczenie dopelnienia zerami obok wartosci liczbowej, ktora dla
- * samych zer jest pusta.
+ * An all-zero input does not round-trip: `encode("")` gives "1", while `decode("1")` gives a zero
+ * byte. The cause is that the zero padding is counted alongside the numeric value, which for
+ * all-zero input is empty.
  *
- * To zachowanie **zastane**, nie wprowadzone przeprowadzka - i celowo nienaprawione, bo Base58
- * koduje tu klucze, a zmiana kodowania zmienilaby ich postac na dysku i na wire. W praktyce
- * nieosiagalne: klucz publiczny zaczyna sie od 0x02/0x03, a WIF od 0x80.
+ * This behaviour is **inherited**, not introduced by the move — and deliberately left unfixed,
+ * because Base58 encodes keys here and changing the encoding would change their form on disk and
+ * on the wire. Unreachable in practice: a public key starts with 0x02/0x03 and a WIF with 0x80.
  *
- * Test opisuje stan faktyczny, zeby nikt nie uznal go za przypadek.
+ * The test records the actual state of affairs, so that nobody takes it for an accident.
  */
 TEST(Base58Test, AllZeroInputDoesNotRoundTripAndThatIsKnown) {
     EXPECT_EQ("1", Base58::encode(""));
@@ -77,7 +77,7 @@ TEST(Base58Test, AllZeroInputDoesNotRoundTripAndThatIsKnown) {
     EXPECT_NE("", Base58::decode(Base58::encode("")));
 }
 
-/// Wiodace zera sa kodowane jako '1' i musza przezyc obrot - to najczestszy blad w Base58.
+/// Leading zeros are encoded as '1' and have to survive a round trip — the commonest Base58 bug.
 TEST(Base58Test, LeadingZerosSurvive) {
     const std::string s("\x00\x00\x00\x2a", 4);
 
@@ -90,43 +90,43 @@ TEST(Base58Test, LeadingZerosSurvive) {
 TEST(Base58Test, IsAcceptsOnlyTheAlphabet) {
     EXPECT_TRUE(Base58::is("StV1DL6CwTryKyV"));
     EXPECT_TRUE(Base58::is(""));
-    // Znaki wylaczone z alfabetu Base58, bo myla sie wzrokowo.
+    // Characters excluded from the Base58 alphabet because they are easily confused by eye.
     EXPECT_FALSE(Base58::is("0"));
     EXPECT_FALSE(Base58::is("O"));
     EXPECT_FALSE(Base58::is("I"));
     EXPECT_FALSE(Base58::is("l"));
-    EXPECT_FALSE(Base58::is("ma spacje"));
+    EXPECT_FALSE(Base58::is("has a space"));
 }
 
 // ---------------------------------------------------------------------------------------------
-// Base58Check - suma kontrolna liczona wstrzyknieta funkcja.
+// Base58Check — the checksum computed with the injected function.
 // ---------------------------------------------------------------------------------------------
 
 TEST(Base58Test, ChecksumRoundTrip) {
-    const std::string payload("dane do zakodowania");
+    const std::string payload("data to encode");
 
     const std::string encoded = Base58::encodeWithChecksum(payload, fakeSha256);
 
     EXPECT_EQ(payload, Base58::decodeWithChecksum(encoded, fakeSha256));
 }
 
-/// Sedno zmiany API: suma kontrolna ma pochodzic z **podanej** funkcji. Gdyby implementacja
-/// wolala cokolwiek innego, odczyt inna funkcja by przeszedl.
+/// The crux of the API change: the checksum must come from the function **given**. Were the
+/// implementation to call anything else, a read with a different function would succeed.
 TEST(Base58Test, ChecksumIsComputedWithTheGivenFunction) {
-    const std::string encoded = Base58::encodeWithChecksum("dane", fakeSha256);
+    const std::string encoded = Base58::encodeWithChecksum("data", fakeSha256);
 
     EXPECT_THROW(Base58::decodeWithChecksum(encoded, otherSha256), privmx::utils::PrivmxException);
 }
 
 TEST(Base58Test, CorruptedPayloadIsRejected) {
-    std::string encoded = Base58::encodeWithChecksum("dane do zakodowania", fakeSha256);
+    std::string encoded = Base58::encodeWithChecksum("data to encode", fakeSha256);
 
     encoded[2] = (encoded[2] == 'z' ? 'y' : 'z');
     EXPECT_THROW(Base58::decodeWithChecksum(encoded, fakeSha256), privmx::utils::PrivmxException);
 }
 
-/// Wejscie krotsze niz sama suma kontrolna. Przed przeprowadzka `data.length() - 4` przekrecalo
-/// licznik i `substr` dostawal wartosc bliska zakresowi `size_t`.
+/// Input shorter than the checksum itself. Before the move `data.length() - 4` wrapped around and
+/// `substr` was handed a value near the top of the `size_t` range.
 TEST(Base58Test, InputShorterThanTheChecksumIsRejected) {
     EXPECT_THROW(Base58::decodeWithChecksum("", fakeSha256), privmx::utils::PrivmxException);
     EXPECT_THROW(Base58::decodeWithChecksum("2g", fakeSha256), privmx::utils::PrivmxException);

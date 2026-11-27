@@ -31,18 +31,17 @@ std::string describe(const std::exception& e, const std::string& context) {
 void CryptoErrors::rethrow(const std::exception& e, const std::string& context) {
     const std::string description = describe(e, context);
 
-    // Kolejnosc ma znaczenie: od najbardziej szczegolowych w dol hierarchii pmx-crypto.
-    // Wyjatki pmx-crypto nie niosa kodu (wszystkie maja `code == 0`), wiec rozpoznajemy
-    // je po typie, a nie po wartosci.
+    // Order matters: most specific first, going down pmx-crypto's hierarchy. Its exceptions carry
+    // no code (every one has `code == 0`), so they are recognised by type, not by value.
 
-    // --- przypadki, dla ktorych endpoint ma juz dokladny odpowiednik -------------------------
-    // Zachowujemy stare kody, zeby wrappery reagujace na konkretny blad dalej dzialaly.
+    // --- cases the endpoint already has an exact counterpart for ------------------------------
+    // The old codes are kept, so wrappers that react to a particular error keep working.
 
-    // Nieudane uwierzytelnienie przy deszyfrowaniu - zly klucz albo naruszone dane.
-    // To jedyny blad deszyfrowania o znaczeniu bezpieczenstwa i stary endpoint mial na niego
-    // osobny kod, wiec go zachowujemy. Uwaga na pulapke nazw: AEAD zglasza ten przypadek jako
-    // `DecryptionFinalizationFailed` (EVP_DecryptFinal_ex), natomiast `DecryptionInvalidTag`
-    // znaczy tylko tyle, ze szyfrogram jest krotszy niz sam tag - czyli ramka jest uszkodzona.
+    // Failed authentication on decryption — a wrong key or tampered data. This is the only
+    // decryption error with a security meaning, and the old endpoint had a code of its own for it,
+    // so it is preserved. Mind the naming trap: an AEAD reports this case as
+    // `DecryptionFinalizationFailed` (EVP_DecryptFinal_ex), whereas `DecryptionInvalidTag` means
+    // only that the ciphertext is shorter than the tag itself — that is, a malformed frame.
     if (dynamic_cast<const cs::PrivmxCryptoserviceDecryptionFinalizationFailedException*>(&e) != nullptr ||
         dynamic_cast<const cs::PrivmxCryptoserviceDecryptionWrongMessageSecurityTagException*>(&e) != nullptr) {
         throw crypto::WrongMessageSecurityTagException(description);
@@ -63,13 +62,13 @@ void CryptoErrors::rethrow(const std::exception& e, const std::string& context) 
         throw crypto::InvalidWIFPayloadLengthException(description);
     }
 
-    // --- pozostale: po kategorii (roli kryptograficznej) --------------------------------------
-    // Kategorii jest szesc i pokrywaja cale `Exceptions.hpp` oraz `AsyncExceptions.hpp`.
+    // --- the rest: by category (cryptographic role) -------------------------------------------
+    // There are six categories and they cover the whole of `Exceptions.hpp` and `AsyncExceptions.hpp`.
     //
-    // Bez osobnej galezi dla ECC: pmx-crypto wycofalo `PrivmxCryptoserviceEccException`, a bledy
-    // operacji na krzywych wywodza sie teraz z `PrivmxCryptoserviceAsyncKeyException` i lapie je
-    // galaz ponizej. `crypto::EccOperationFailureException` zostaje w API — nadal rzuca ja
-    // `crypto/` (stary modul) — ale stad juz nie wychodzi.
+    // No separate branch for ECC: pmx-crypto retired `PrivmxCryptoserviceEccException`, and errors
+    // from curve operations now derive from `PrivmxCryptoserviceAsyncKeyException`, which the
+    // branch below catches. `crypto::EccOperationFailureException` stays in the API — the legacy
+    // `crypto/` module still throws it — but it no longer leaves this function.
 
     if (dynamic_cast<const cs::PrivmxCryptoserviceAsyncKeyException*>(&e) != nullptr) {
         throw crypto::AsymmetricKeyFailureException(description);

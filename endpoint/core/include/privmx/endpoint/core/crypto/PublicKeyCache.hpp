@@ -24,9 +24,9 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-// Memoizuje `PublicKey::fromBase58DER`, ktorego kosztem jest sprawdzenie podgrupy - pelne mnozenie
-// skalarne, tak drogie jak ECDH - podczas gdy przebieg weryfikacji parsuje w kolko te same kilka
-// kluczy autorow dla kazdego obiektu.
+// Memoises `PublicKey::fromBase58DER`, whose cost is the subgroup check — a full scalar
+// multiplication, as expensive as an ECDH — while a verification pass parses the same handful of
+// author keys over and over, once per object.
 class PublicKeyCache {
 public:
     static std::shared_ptr<PublicKeyCache> getInstance();
@@ -34,9 +34,9 @@ public:
     PublicKeyCache(const PublicKeyCache& obj) = delete;
     void operator=(const PublicKeyCache&) = delete;
 
-    // Ten sam wynik i te same wyjatki co `PublicKey::fromBase58DER`. Klucz, ktorego nie da sie
-    // sparsowac, nie trafia do cache'u. Jedna tablica dla wszystkich watkow, wiec klucz sparsowany
-    // na watku puli zdarzen jest trafieniem rowniez na watku wolajacego.
+    // The same result and the same exceptions as `PublicKey::fromBase58DER`. A key that does not
+    // parse is never cached. One table across all threads, so a key parsed on the event pool's
+    // thread is a hit on the caller's thread too.
     PublicKey fromBase58DER(const std::string& base58DER);
 
     void clear();
@@ -46,18 +46,18 @@ protected:
     PublicKeyCache() {};
 
 private:
-    // Uchwyt instancji mieszka w `SingletonSlot` w pliku zrodlowym, a nie tutaj - patrz
-    // privmx/utils/SingletonSlot.hpp po powod (kolejnosc niszczenia statykow).
+    // The instance handle lives in a `SingletonSlot` in the source file rather than here — see
+    // privmx/utils/SingletonSlot.hpp for why (static destruction order).
 
-    // Bridge jest jedyna strona, ktora model zagrozen dopuszcza jako wroga, i to on decyduje, ile
-    // roznych kluczy autorow poda. Bez gornego ograniczenia bylaby to nieograniczona alokacja
-    // pod jego kontrola.
+    // The bridge is the one party the threat model admits as hostile, and it decides how many
+    // distinct author keys it serves. Without an upper bound this would be unbounded allocation
+    // under its control.
     static constexpr std::size_t MAX_ENTRIES_PER_GENERATION = 128;
 
     mutable std::shared_mutex _mutex;
-    // Dwie generacje zamiast LRU: eksmisja to jedno przeniesienie, a `_previous` utrzymuje klucz
-    // osiagalnym przez jeszcze jedna runde, wiec wpisy faktycznie uzywane nie musza byc parsowane
-    // ponownie zaraz po zamianie.
+    // Two generations instead of an LRU: eviction is a single move, and `_previous` keeps a key
+    // reachable for one more round, so entries that are actually in use do not have to be parsed
+    // again right after a swap.
     std::unordered_map<std::string, PublicKey> _current;
     std::unordered_map<std::string, PublicKey> _previous;
 };
