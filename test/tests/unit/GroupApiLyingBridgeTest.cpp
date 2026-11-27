@@ -324,6 +324,21 @@ struct Bridge {
                 std::any_of(model.keys.begin(), model.keys.end(), [&](const auto& e) { return e.keyVersion != next; })) {
                 throw std::runtime_error("SPACE_KEYS_INVALID");
             }
+            // A Space rung is exactly iv(12) || ciphertext(32) || tag(16); a span keeps at most four.
+            for (const auto* list : std::initializer_list<const std::vector<server::SpaceRung>*>{&model.rungs, &repairs}) {
+                for (const auto& rung : *list) {
+                    if (privmx::utils::Base64::toString(rung.data).size() != 60) {
+                        throw std::runtime_error("SPACE_KEYS_INVALID");
+                    }
+                }
+            }
+            for (const auto& repair : repairs) {
+                if (std::count_if(space.rungs.begin(), space.rungs.end(), [&](const auto& r) {
+                        return r.atKeyVersion == repair.atKeyVersion && r.targetKeyVersion == repair.targetKeyVersion;
+                    }) >= 4) {
+                    throw std::runtime_error("SPACE_KEYS_INVALID");
+                }
+            }
             for (const auto& repair : repairs) {
                 const auto owed = LadderMath::rungSpansFor(static_cast<std::uint32_t>(repair.atKeyVersion), 1);
                 if (repair.atKeyVersion < 2 || repair.atKeyVersion >= next ||
@@ -5760,6 +5775,87 @@ TEST_F(GroupApiLyingBridgeSpaces, SECURITY_GarbageRungsFromAMemberAreRepairedAtT
         return call.method == "context.spaceRotateKey";
     });
     EXPECT_FALSE(server::SpaceRotateKeyModel::fromJSON(next->params).repairRungs.has_value());
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AManagerChecksEveryVersionSinceTheLastPruneInFewRequests) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    // 301 rotations by bob, a user (no prune); the one that makes version 8, an aligned version with skip rungs to
+    // 6 and 4, has garbage rungs.
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob" && model.statement.keyVersion == 8) {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    for (int i = 0; i < 301; ++i) {
+        client("bob").rotateSpaceKey(spaceId);
+    }
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    ASSERT_EQ(bridge.spaces.at(spaceId).info.keyVersion, 302);
+    // One manager rotation, in a fresh session: every version 1..302 checked, version 8 repaired, pruned.
+    const std::size_t before = count("alice", "context.spaceGetKeyArchive");
+    sibling("alice").rotateSpaceKey(spaceId);
+    const std::size_t asked = count("alice", "context.spaceGetKeyArchive") - before;
+    EXPECT_LT(asked, 12u) << "pages of the range and a few hops, not one request a version";
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    std::set<std::pair<std::int64_t, std::int64_t>> repaired;
+    for (const auto& rung : sent.repairRungs.value_or(std::vector<server::SpaceRung>{})) {
+        repaired.insert({rung.atKeyVersion, rung.targetKeyVersion});
+    }
+    EXPECT_EQ(repaired, (std::set<std::pair<std::int64_t, std::int64_t>>{{8, 7}, {8, 6}, {8, 4}}));
+    EXPECT_EQ(sent.prune, std::optional<bool>(true));
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 303);
+    client("alice").addSpaceRecipients(spaceId, {person("carol", "user")});
+    EXPECT_EQ(sibling("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AFullSpanBlocksThePruneNotTheRotation) {
+    const std::string spaceId = makeSpace();
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob") {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    client("bob").rotateSpaceKey(spaceId);
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    // Span 2->1 holds four rungs, none good: the Bridge takes no fifth.
+    auto& rungs = bridge.spaces.at(spaceId).rungs;
+    for (int i = 0; i < 3; ++i) {
+        rungs.push_back(server::SpaceRung{
+            .atKeyVersion = 2,
+            .targetKeyVersion = 1,
+            .data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60)),
+        });
+    }
+    EXPECT_EQ(sibling("alice").rotateSpaceKey(spaceId), 3);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    EXPECT_FALSE(sent.prune.value_or(false));
+    EXPECT_FALSE(sent.repairRungs.has_value());
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AnArchiveThatDoesNotReadLeavesTheRotationWithoutAPrune) {
+    const std::string spaceId = makeSpace();
+    client("bob").rotateSpaceKey(spaceId); // version 2, unpruned
+    bridge.onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) -> void {
+        bridgeError<srv::AccessDeniedException>(); // an ACL with spaceRotateKey but not spaceGetKeyArchive
+    };
+    EXPECT_EQ(sibling("alice").rotateSpaceKey(spaceId), 3);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    EXPECT_FALSE(server::SpaceRotateKeyModel::fromJSON(rotation->params).prune.value_or(false));
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0);
 }
 
 TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AManagerDoesNotPruneWhatSheCannotCheck) {

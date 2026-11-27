@@ -761,7 +761,7 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
             return SpaceKeyUse{.key = walk.key, .via = {}, .wrap = {}};
         }
         // A rung that does not lead on: any recipient may rotate, and the Bridge cannot check a symmetric rung, so a
-        // rotation by someone who is no manager keeps the older wraps (the Bridge prunes them only after a manager's).
+        // rotation keeps the older wraps unless a manager asks for a prune after checking every rung since the last one.
         // The caller's own wrap of `keyVersion`, or of a version between it and where the walk stopped from which the
         // ladder works, is the way round.
         fetch(goal, walk.reached - 1);
@@ -879,75 +879,111 @@ std::pair<std::vector<group::server::SpaceRung>, bool> GroupApiImpl::spaceLadder
     const group::server::SpaceInfo& space,
     std::size_t room
 ) {
-    // ponytail: the newest 256 versions since the last prune are checked and nothing is pruned past that, so a Space
-    // rotated more often between pruning managers keeps its earlier wraps; check in rounds if that bites.
-    static constexpr std::int64_t MAX_CHECKED = 256;
-    const std::int64_t high = space.keyVersion; // the new version's own rungs are written with it
-    std::int64_t low = space.keysPrunedBelow.value_or(0) + 1;
-    bool prune = true;
-    if (high - low + 1 > MAX_CHECKED) {
-        low = high - MAX_CHECKED + 1;
-        prune = false;
-    }
-    std::vector<group::server::SpaceRung> repairs;
-    // Every rung served for the versions in range, by span: one that opens to the committed key is enough.
+    // ponytail: every version since the last prune is checked, so after a very long run of member-only rotations
+    // one manager rotation pages the whole unpruned range once; a prune resets it.
+    static constexpr std::size_t MAX_RUNGS_PER_SPAN = 4; // the Bridge refuses a fifth
+    const std::int64_t high = space.keyVersion;          // the new version's own rungs are written with it
+    const std::int64_t low = std::clamp<std::int64_t>(space.keysPrunedBelow.value_or(0), 0, high) + 1;
+    // Every rung served for the versions in range, by span: one that opens to the committed key is enough. The check
+    // is optional: if the archive cannot be read (an ACL without spaceGetKeyArchive, a network error), the rotation
+    // goes ahead with no repairs and no prune.
     std::map<std::pair<std::int64_t, std::int64_t>, std::vector<std::string>> served;
-    for (std::int64_t from = low; from <= high;) {
-        group::server::SpaceGetKeyArchiveModel model;
-        model.id = space.id;
-        model.fromKeyVersion = from;
-        model.toKeyVersion = high;
-        const auto page = _serverApi.spaceGetKeyArchive(model);
-        for (const group::server::SpaceRung& rung : page.rungs) {
-            served[{rung.atKeyVersion, rung.targetKeyVersion}].push_back(rung.data);
+    try {
+        for (std::int64_t from = low; from <= high;) {
+            group::server::SpaceGetKeyArchiveModel model;
+            model.id = space.id;
+            model.fromKeyVersion = from;
+            model.toKeyVersion = high;
+            const auto page = _serverApi.spaceGetKeyArchive(model);
+            for (const group::server::SpaceRung& rung : page.rungs) {
+                served[{rung.atKeyVersion, rung.targetKeyVersion}].push_back(rung.data);
+            }
+            if (!page.nextKeyVersion.has_value() || page.nextKeyVersion.value() <= from) {
+                break;
+            }
+            from = page.nextKeyVersion.value();
         }
-        if (!page.nextKeyVersion.has_value() || page.nextKeyVersion.value() <= from) {
-            break;
-        }
-        from = page.nextKeyVersion.value();
+    } catch (const std::exception& e) {
+        LOG_WARN("[space ladder] space ", space.id, ": the archive did not read, nothing pruned: ", e.what())
+        return {{}, false};
     }
     const auto log = spaceLogOf(space.id);
-    for (std::int64_t at = std::max<std::int64_t>(low, 2); at <= high; ++at) {
-        std::string atKey;
+    const std::string prefix = space.id + ":" + std::to_string(spaceGeneration(space.id)) + ":";
+    // The key a candidate rung of (at -> target) gives, if it is the committed one.
+    const auto opened = [&](std::int64_t at, std::int64_t target,
+                            const std::string& atKey) -> std::optional<std::string> {
+        for (const std::string& data : served[{at, target}]) {
+            try {
+                std::string key = keytree::SpaceLog::openRung(
+                    space.id, static_cast<std::uint64_t>(at), static_cast<std::uint64_t>(target), atKey,
+                    privmx::utils::Base64::toString(data)
+                );
+                if (spaceKeyCommitted(log, space.id, target, key)) {
+                    return key;
+                }
+            } catch (...) {}
+        }
+        return std::nullopt;
+    };
+    // The keys top-down off the unit rungs already fetched, each verified and kept for later reads; spaceKeyAt (more
+    // requests: descent, own wraps) only where none opens, and for a skip target below the range.
+    std::map<std::int64_t, std::optional<std::string>> keys; // nullopt: out of reach, tried once
+    const auto keyAt = [&](std::int64_t version) -> std::optional<std::string> {
+        if (const auto known = keys.find(version); known != keys.end()) {
+            return known->second;
+        }
         try {
-            atKey = spaceKeyAt(space, at).key;
+            return keys[version] = spaceKeyAt(space, version).key;
         } catch (const std::exception& e) {
-            LOG_WARN("[space ladder] space ", space.id, " version ", at, " is out of reach: ", e.what())
+            LOG_WARN("[space ladder] space ", space.id, " version ", version, " is out of reach: ", e.what())
+            return keys[version] = std::nullopt;
+        }
+    };
+    if (!keyAt(high).has_value()) {
+        return {{}, false};
+    }
+    for (std::int64_t version = high - 1; version >= std::max<std::int64_t>(low - 1, 1); --version) {
+        const auto above = keys.find(version + 1);
+        if (above == keys.end() || !above->second.has_value()) {
+            keyAt(version);
+            continue;
+        }
+        if (const auto key = opened(version + 1, version, above->second.value()); key.has_value()) {
+            keys[version] = key.value();
+            _spaceKeys.set(prefix + std::to_string(version), SpaceKeyUse{.key = key.value(), .via = {}, .wrap = {}});
+        } else {
+            keyAt(version);
+        }
+    }
+
+    bool prune = true;
+    std::vector<group::server::SpaceRung> repairs;
+    for (std::int64_t at = std::max<std::int64_t>(low, 2); at <= high; ++at) {
+        const auto atKey = keyAt(at);
+        if (!atKey.has_value()) {
             prune = false;
             continue;
         }
         for (const keytree::RungSpan& span : keytree::LadderMath::rungSpansFor(static_cast<std::uint32_t>(at), 1)) {
-            const auto& candidates = served[{span.at, span.target}];
-            const bool holds = std::any_of(candidates.begin(), candidates.end(), [&](const std::string& data) {
-                try {
-                    return spaceKeyCommitted(
-                        log, space.id, span.target,
-                        keytree::SpaceLog::openRung(
-                            space.id, span.at, span.target, atKey, privmx::utils::Base64::toString(data)
-                        )
-                    );
-                } catch (...) { return false; }
-            });
-            if (holds) {
+            if (opened(span.at, span.target, atKey.value()).has_value()) {
                 continue;
             }
-            try {
-                const std::string targetKey = spaceKeyAt(space, span.target).key;
-                if (repairs.size() >= room) {
-                    prune = false; // the rest at the next manager's rotation
-                    continue;
-                }
-                group::server::SpaceRung rung;
-                rung.atKeyVersion = span.at;
-                rung.targetKeyVersion = span.target;
-                rung.data = privmx::utils::Base64::from(
-                    keytree::SpaceLog::sealRung(space.id, span.at, span.target, atKey, targetKey)
-                );
-                repairs.push_back(std::move(rung));
-            } catch (const std::exception& e) {
-                LOG_WARN("[space ladder] space ", space.id, " version ", span.target, " is out of reach: ", e.what())
+            const auto targetKey = keyAt(span.target);
+            // Not repaired: a key out of reach, a span already full (the Bridge would refuse the whole request), or no
+            // room left in this request. The rotation goes ahead without a prune.
+            if (!targetKey.has_value() ||
+                served[{span.at, span.target}].size() >= MAX_RUNGS_PER_SPAN ||
+                repairs.size() >= room) {
                 prune = false;
+                continue;
             }
+            group::server::SpaceRung rung;
+            rung.atKeyVersion = span.at;
+            rung.targetKeyVersion = span.target;
+            rung.data = privmx::utils::Base64::from(
+                keytree::SpaceLog::sealRung(space.id, span.at, span.target, atKey.value(), targetKey.value())
+            );
+            repairs.push_back(std::move(rung));
         }
     }
     return {std::move(repairs), prune};

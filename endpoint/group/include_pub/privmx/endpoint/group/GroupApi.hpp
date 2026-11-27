@@ -693,8 +693,9 @@ public:
     // GroupDataIntegrityException otherwise. Earlier wraps are kept until a manager's rotation prunes them, which it
     // does only once it has checked every rung since the last prune and added a repair rung where one did not hold.
     // So once the ladder holds, a recipient reads the whole history, a newcomer included, and a removed one gets no
-    // later key. Garbage rungs a member wrote are repaired at the next pruning manager rotation; until then a newcomer
-    // (who has no earlier wraps) may not reach the versions behind them. The number of key versions has no ceiling of
+    // later key. Bad rungs are repaired at the next manager rotation and the earlier wraps pruned then, except where a
+    // manager filled a span with four bad rungs (the Bridge keeps no more): that blocks pruning, not rotations. Until
+    // the repair a newcomer (who has no earlier wraps) may not reach the versions behind bad rungs. The number of key versions has no ceiling of
     // its own; the Bridge's rotation rate limit stays.
     //
     // With a PinStore set, the device keeps each Space's verified state: the next session checks only the
