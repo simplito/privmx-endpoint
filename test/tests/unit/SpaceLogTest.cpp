@@ -39,8 +39,16 @@ protected:
     SpaceLogGroup group(const std::string& id, const PrivateKey& key, std::uint64_t epoch, const std::string& role) {
         return {.groupId = id, .role = role, .groupKeyVersion = epoch, .groupPubKey = key.getPublicKey().toBase58DER()};
     }
-    SpaceStatement statement(SpaceOp op, const std::optional<SpaceLogState>& prior, std::uint64_t keyVersion, const std::string& key) {
-        SpaceStatement s;
+    // A statement written as the whole roster after it (`groups`, `users`): `by` and `through` turn that into the
+    // deltas from `prior` and the rosterHash (SpaceLog::setRoster), so a case can also write a change no op allows.
+    struct Draft : SpaceStatement {
+        std::optional<SpaceLogState> prior;
+        std::vector<SpaceLogGroup> groups;
+        std::vector<SpaceLogUser> users;
+    };
+    Draft statement(SpaceOp op, const std::optional<SpaceLogState>& prior, std::uint64_t keyVersion, const std::string& key) {
+        Draft s;
+        s.prior = prior;
         s.spaceId = spaceId;
         s.contextId = "ctx";
         s.seq = prior.has_value() ? prior->seq + 1 : 1;
@@ -55,13 +63,17 @@ protected:
         }
         return s;
     }
-    SpaceStatement by(SpaceStatement s, const std::string& signer, const PrivateKey& key) {
+    SpaceStatement by(Draft draft, const std::string& signer, const PrivateKey& key) {
+        SpaceLog::setRoster(draft, draft.prior, draft.groups, draft.users);
+        SpaceStatement s = draft;
         s.signer = signer;
         s.via.clear();
         SpaceLog::sign(s, key, std::nullopt);
         return s;
     }
-    SpaceStatement through(SpaceStatement s, const std::string& signer, const PrivateKey& key, const std::string& via, const PrivateKey& groupKey) {
+    SpaceStatement through(Draft draft, const std::string& signer, const PrivateKey& key, const std::string& via, const PrivateKey& groupKey) {
+        SpaceLog::setRoster(draft, draft.prior, draft.groups, draft.users);
+        SpaceStatement s = draft;
         s.signer = signer;
         s.via = via;
         SpaceLog::sign(s, key, groupKey);
@@ -69,7 +81,7 @@ protected:
     }
     // alice (manager), bob (user), sales at epoch 1 (manager), support (user); key version 1.
     SpaceLogState created() {
-        SpaceStatement s = statement(SpaceOp::Create, std::nullopt, 1, key1);
+        Draft s = statement(SpaceOp::Create, std::nullopt, 1, key1);
         s.users = {user("alice", alice, "manager"), user("bob", bob, "user")};
         s.groups = {group("sales", sales1, 1, "manager"), group("support", support, 4, "user")};
         return SpaceLog::apply(std::nullopt, by(s, "alice", alice));
@@ -88,13 +100,13 @@ TEST_F(SpaceLogRules, TheFirstStatementMakesTheSpaceAndNamesItsCreator) {
     EXPECT_EQ(state.digest.size(), 32u);
 
     // Through a group she is in: carol makes a Space for sales and signs with the group's key as well.
-    SpaceStatement s = statement(SpaceOp::Create, std::nullopt, 1, key1);
+    Draft s = statement(SpaceOp::Create, std::nullopt, 1, key1);
     s.groups = {group("sales", sales1, 1, "manager")};
     EXPECT_EQ(SpaceLog::apply(std::nullopt, through(s, "carol", carol, "sales", sales1)).creator, "carol");
 }
 
 TEST_F(SpaceLogRules, SECURITY_ASpaceIsMadeByOneOfItsOwnManagers) {
-    SpaceStatement s = statement(SpaceOp::Create, std::nullopt, 1, key1);
+    Draft s = statement(SpaceOp::Create, std::nullopt, 1, key1);
     s.users = {user("alice", alice, "manager"), user("bob", bob, "user")};
     s.groups = {group("sales", sales1, 1, "user")};
     // Eve lists the right people and signs herself: she is not among them.
@@ -104,9 +116,9 @@ TEST_F(SpaceLogRules, SECURITY_ASpaceIsMadeByOneOfItsOwnManagers) {
     // A user of the Space, not a manager; and a group that is only a user.
     EXPECT_THROW(SpaceLog::apply(std::nullopt, by(s, "bob", bob)), GroupUnauthorizedSignerException);
     EXPECT_THROW(SpaceLog::apply(std::nullopt, through(s, "carol", carol, "sales", sales1)), GroupUnauthorizedSignerException);
-    // Nobody to manage it.
+    // Nobody to manage it: whoever signs is no manager.
     s.users = {user("bob", bob, "user")};
-    EXPECT_THROW(SpaceLog::apply(std::nullopt, by(s, "bob", bob)), GroupDataIntegrityException);
+    EXPECT_THROW(SpaceLog::apply(std::nullopt, by(s, "bob", bob)), GroupUnauthorizedSignerException);
     // Not at key version 1, not as statement 1, or not a creation.
     s = statement(SpaceOp::Create, std::nullopt, 2, key1);
     s.users = {user("alice", alice, "manager")};
@@ -135,7 +147,7 @@ TEST_F(SpaceLogRules, SECURITY_AKeyVersionIsMadeByARecipientAndNobodyElse) {
         GroupUnauthorizedSignerException
     );
     // She adds her group to the list in the same statement: standing is judged before the statement.
-    SpaceStatement adding = statement(SpaceOp::Add, state, 1, key1);
+    Draft adding = statement(SpaceOp::Add, state, 1, key1);
     adding.groups.push_back(group("eves-group", eve, 1, "manager"));
     EXPECT_THROW(SpaceLog::apply(state, through(adding, "eve", eve, "eves-group", eve)), GroupUnauthorizedSignerException);
 
@@ -155,7 +167,7 @@ TEST_F(SpaceLogRules, SECURITY_ARotationChangesTheKeyAndNothingElse) {
     EXPECT_THROW(SpaceLog::apply(state, by(statement(SpaceOp::Rotate, state, 1, key2), "bob", bob)), GroupDataIntegrityException);
     EXPECT_THROW(SpaceLog::apply(state, by(statement(SpaceOp::Rotate, state, 3, key2), "bob", bob)), GroupDataIntegrityException);
     // A rotation that also lets somebody in, drops somebody, or promotes its author.
-    SpaceStatement s = statement(SpaceOp::Rotate, state, 2, key2);
+    Draft s = statement(SpaceOp::Rotate, state, 2, key2);
     s.users.push_back(user("eve", eve, "user"));
     EXPECT_THROW(SpaceLog::apply(state, by(s, "bob", bob)), GroupDataIntegrityException);
     s = statement(SpaceOp::Rotate, state, 2, key2);
@@ -168,22 +180,21 @@ TEST_F(SpaceLogRules, SECURITY_ARotationChangesTheKeyAndNothingElse) {
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.users[0] = user("alice", eve, "manager");
     EXPECT_THROW(SpaceLog::apply(state, by(s, "bob", bob)), GroupDataIntegrityException);
-    // A group's epoch and key may move with it: that is what a refresh after a removal in the group is. Bob, a
-    // user of the Space, is not the one to do it: with his own key in the sales group's place he would be a manager.
+    // A group's epoch and key may move with it: that is what a refresh after a removal in the group is. Any
+    // recipient may write one - bob himself, dave through support - as any recipient may rotate (a stale key must not
+    // wait for a manager). Whether the key is the group's is the reader's to check against the group's verified keys
+    // (GroupApiImpl::requireGroupKeyRefreshesHold), not something the statement shows.
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.groups[0] = group("sales", sales2, 2, "manager");
-    EXPECT_THROW(SpaceLog::apply(state, by(s, "bob", bob)), GroupUnauthorizedSignerException);
-    EXPECT_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)), GroupUnauthorizedSignerException);
-    // A manager is, and so is the group itself - which shows its standing with the key it had.
+    EXPECT_NO_THROW(SpaceLog::apply(state, by(s, "bob", bob)));
+    EXPECT_NO_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)));
     EXPECT_NO_THROW(SpaceLog::apply(state, by(s, "alice", alice)));
     const SpaceLogState refreshed = SpaceLog::apply(state, through(s, "carol", carol, "sales", sales1));
     EXPECT_EQ(refreshed.group("sales")->groupKeyVersion, 2u);
-    // A group that is a user of the Space refreshes its own key and nobody else's.
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.groups[1] = group("support", eve, 5, "user");
-    EXPECT_NO_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)));
     s.groups[0] = group("sales", sales2, 2, "manager");
-    EXPECT_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)), GroupUnauthorizedSignerException);
+    EXPECT_NO_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)));
     // Only forward, and only to another key.
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.groups[0] = group("sales", sales2, 1, "manager");
@@ -200,9 +211,105 @@ TEST_F(SpaceLogRules, SECURITY_ARotationChangesTheKeyAndNothingElse) {
     );
 }
 
+TEST_F(SpaceLogRules, ANonManagerThroughOneGroupRotatesAndRefreshesAnother) {
+    // dave, through support (a user of the Space), rotates while sales' key is stale and moves sales to its epoch 2.
+    // The log takes it; a reader then holds sales2 to sales' verified keys (refusedRefresh, GroupApiLyingBridgeTest).
+    const SpaceLogState state = created();
+    Draft s = statement(SpaceOp::Rotate, state, 2, key2);
+    s.groups[0] = group("sales", sales2, 2, "manager");
+    const SpaceStatement rotation = through(s, "dave", eve, "support", support);
+    ASSERT_EQ(rotation.refreshedGroups.size(), 1u);
+    const SpaceLogState rotated = SpaceLog::apply(state, rotation);
+    EXPECT_EQ(rotated.group("sales")->groupKeyVersion, 2u);
+    EXPECT_EQ(rotated.group("sales")->groupPubKey, sales2.getPublicKey().toBase58DER());
+    EXPECT_EQ(rotated.group("sales")->role, "manager");
+    EXPECT_EQ(rotated.keyVersion, 2u);
+}
+
+TEST_F(SpaceLogRules, SECURITY_DeltasThatDoNotApplyCleanlyAreRefused) {
+    const SpaceLogState state = created();
+    // Raw deltas, signed by alice (a manager), with the rosterHash of `groups`/`users` - or of the honest result.
+    const auto signedAs = [&](SpaceStatement s) {
+        s.signer = "alice";
+        s.via.clear();
+        SpaceLog::sign(s, alice, std::nullopt);
+        return s;
+    };
+    const auto raw = [&](SpaceOp op, std::uint64_t keyVersion, const std::string& key) {
+        SpaceStatement s = statement(op, state, keyVersion, key);
+        s.rosterHash = SpaceLog::rosterHash(state.groups, state.users);
+        return s;
+    };
+    const SpaceLogUser dave = user("dave", eve, "user");
+    std::vector<SpaceLogUser> withDave = state.users;
+    withDave.push_back(dave);
+
+    // The honest addition, for contrast.
+    SpaceStatement s = raw(SpaceOp::Add, 1, key1);
+    s.addedUsers = {dave};
+    s.rosterHash = SpaceLog::rosterHash(state.groups, withDave);
+    EXPECT_NO_THROW(SpaceLog::apply(state, signedAs(s)));
+    // Its rosterHash is of another roster.
+    s.rosterHash = SpaceLog::rosterHash(state.groups, state.users);
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    // Adding a present recipient.
+    s = raw(SpaceOp::Add, 1, key1);
+    s.addedUsers = {user("bob", bob, "user")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    s = raw(SpaceOp::Add, 1, key1);
+    s.addedGroups = {group("sales", sales1, 1, "manager")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    // The same id twice, in one list or across two.
+    s = raw(SpaceOp::Add, 1, key1);
+    s.addedUsers = {dave, dave};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    s = raw(SpaceOp::Remove, 2, key2);
+    s.removedGroups = {"support"};
+    s.refreshedGroups = {group("support", eve, 5, "")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    s = raw(SpaceOp::Remove, 2, key2);
+    s.removedUsers = {"bob", "bob"};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    // Removing an absent recipient.
+    s = raw(SpaceOp::Remove, 2, key2);
+    s.removedUsers = {"dave"};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    s = raw(SpaceOp::Remove, 2, key2);
+    s.removedGroups = {"billing"};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    // Refreshing a group that is no recipient, or to an epoch that is not later.
+    s = raw(SpaceOp::Rotate, 2, key2);
+    s.refreshedGroups = {group("billing", eve, 2, "")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    s = raw(SpaceOp::Rotate, 2, key2);
+    s.refreshedGroups = {group("sales", sales2, 1, "")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    s = raw(SpaceOp::Rotate, 2, key2);
+    s.refreshedGroups = {group("sales", sales1, 2, "")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException) << "the same key";
+    // A list its op does not have: an add that refreshes, a rotation that adds, a creation that removes.
+    s = raw(SpaceOp::Add, 1, key1);
+    s.addedUsers = {dave};
+    s.refreshedGroups = {group("sales", sales2, 2, "")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    s = raw(SpaceOp::Rotate, 2, key2);
+    s.addedUsers = {dave};
+    s.rosterHash = SpaceLog::rosterHash(state.groups, withDave);
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+    SpaceStatement first = statement(SpaceOp::Create, std::nullopt, 1, key1);
+    first.addedUsers = {user("alice", alice, "manager")};
+    first.removedUsers = {"bob"};
+    first.rosterHash = SpaceLog::rosterHash({}, first.addedUsers);
+    EXPECT_THROW(SpaceLog::apply(std::nullopt, signedAs(first)), GroupDataIntegrityException);
+    // A role that is none.
+    s = raw(SpaceOp::Add, 1, key1);
+    s.addedUsers = {user("dave", eve, "owner")};
+    EXPECT_THROW(SpaceLog::apply(state, signedAs(s)), GroupDataIntegrityException);
+}
+
 TEST_F(SpaceLogRules, SECURITY_OnlyAManagerChangesTheRecipientsAndOnlyAsTheOpSays) {
     const SpaceLogState state = created();
-    SpaceStatement add = statement(SpaceOp::Add, state, 1, key1);
+    Draft add = statement(SpaceOp::Add, state, 1, key1);
     add.users.push_back(user("dave", eve, "user"));
     // bob is a user; support is a user.
     EXPECT_THROW(SpaceLog::apply(state, by(add, "bob", bob)), GroupUnauthorizedSignerException);
@@ -212,7 +319,7 @@ TEST_F(SpaceLogRules, SECURITY_OnlyAManagerChangesTheRecipientsAndOnlyAsTheOpSay
     EXPECT_EQ(added.keyVersion, 1u);
 
     // An addition keeps the key, adds somebody, and touches nobody who was there.
-    SpaceStatement s = statement(SpaceOp::Add, state, 2, key2);
+    Draft s = statement(SpaceOp::Add, state, 2, key2);
     s.users.push_back(user("dave", eve, "user"));
     EXPECT_THROW(SpaceLog::apply(state, by(s, "alice", alice)), GroupDataIntegrityException);
     s = statement(SpaceOp::Add, state, 1, key2);
@@ -229,7 +336,7 @@ TEST_F(SpaceLogRules, SECURITY_OnlyAManagerChangesTheRecipientsAndOnlyAsTheOpSay
     EXPECT_THROW(SpaceLog::apply(state, by(s, "alice", alice)), GroupDataIntegrityException);
 
     // A removal makes a new key, drops somebody, adds nobody, and leaves a manager.
-    SpaceStatement remove = statement(SpaceOp::Remove, state, 2, key2);
+    Draft remove = statement(SpaceOp::Remove, state, 2, key2);
     remove.users.pop_back();
     const SpaceLogState removed = SpaceLog::apply(state, through(remove, "carol", carol, "sales", sales1));
     EXPECT_EQ(removed.roleOfUser("bob"), "");
@@ -256,7 +363,7 @@ TEST_F(SpaceLogRules, SECURITY_AStatementBelongsToItsPlaceInItsSpace) {
     // Replayed, skipped, or put after another history.
     EXPECT_THROW(SpaceLog::apply(rotated, rotate), GroupDataIntegrityException);
     EXPECT_THROW(SpaceLog::apply(std::nullopt, rotate), GroupDataIntegrityException);
-    SpaceStatement s = statement(SpaceOp::Rotate, rotated, 3, key1);
+    Draft s = statement(SpaceOp::Rotate, rotated, 3, key1);
     s.prevDigest = state.digest;
     EXPECT_THROW(SpaceLog::apply(rotated, by(s, "bob", bob)), GroupDataIntegrityException);
     s = statement(SpaceOp::Rotate, rotated, 3, key1);
@@ -268,8 +375,9 @@ TEST_F(SpaceLogRules, SECURITY_AStatementBelongsToItsPlaceInItsSpace) {
     // Anything changed after signing: the key commitment, a role, the signer, the group named.
     for (const auto& change : std::vector<std::function<void(SpaceStatement&)>>{
              [&](SpaceStatement& t) { t.keyCommit = SpaceLog::keyCommit(spaceId, 2, key1); },
-             [&](SpaceStatement& t) { t.users[1].role = "manager"; },
-             [&](SpaceStatement& t) { t.groups[1].groupPubKey = eve.getPublicKey().toBase58DER(); },
+             [&](SpaceStatement& t) { t.rosterHash = SpaceLog::rosterHash({}, {user("bob", bob, "manager")}); },
+             [&](SpaceStatement& t) { t.addedUsers.push_back(user("eve", eve, "manager")); },
+             [&](SpaceStatement& t) { t.refreshedGroups.push_back(group("sales", eve, 9, "")); },
              [&](SpaceStatement& t) { t.date += 1; },
              [&](SpaceStatement& t) { t.signer = "alice"; },
              [&](SpaceStatement& t) { t.via = "sales"; },
@@ -299,10 +407,15 @@ TEST_F(SpaceLogRules, TheWireFormKeepsEveryByteThatIsSigned) {
     EXPECT_EQ(SpaceLog::digest(back), SpaceLog::digest(original));
     EXPECT_NO_THROW(SpaceLog::apply(state, back));
     // The order recipients are listed in is not part of what is signed.
-    SpaceStatement shuffled = original;
-    std::reverse(shuffled.groups.begin(), shuffled.groups.end());
-    std::reverse(shuffled.users.begin(), shuffled.users.end());
-    EXPECT_EQ(SpaceLog::signedBytes(shuffled), SpaceLog::signedBytes(original));
+    Draft first = statement(SpaceOp::Create, std::nullopt, 1, key1);
+    first.users = {user("alice", alice, "manager"), user("bob", bob, "user")};
+    first.groups = {group("sales", sales1, 1, "manager"), group("support", support, 4, "user")};
+    const SpaceStatement made = by(first, "alice", alice);
+    SpaceStatement shuffled = made;
+    std::reverse(shuffled.addedGroups.begin(), shuffled.addedGroups.end());
+    std::reverse(shuffled.addedUsers.begin(), shuffled.addedUsers.end());
+    EXPECT_EQ(SpaceLog::signedBytes(shuffled), SpaceLog::signedBytes(made));
+    EXPECT_EQ(SpaceLog::fromWire(SpaceLog::toWire(made)).addedUsers.size(), 2u);
     // A key commitment is to this Space, this version and this key.
     EXPECT_NE(SpaceLog::keyCommit(spaceId, 1, key1), SpaceLog::keyCommit(spaceId, 2, key1));
     EXPECT_NE(SpaceLog::keyCommit(spaceId, 1, key1), SpaceLog::keyCommit(std::string(64, 'b'), 1, key1));
@@ -334,6 +447,8 @@ SpaceStatement statementOf(const Poco::JSON::Object::Ptr& wire) {
 TEST(SpaceLogVectors, TheSignedBytesAreTheReferenceOnes) {
     const auto cases = vectors()->getArray("spaceStatement");
     ASSERT_EQ(cases->size(), 4u);
+    std::vector<SpaceLogGroup> groups;
+    std::vector<SpaceLogUser> users;
     for (std::size_t i = 0; i < cases->size(); ++i) {
         const auto entry = cases->getObject(static_cast<unsigned>(i));
         Poco::JSON::Object::Ptr wire = entry->getObject("statement");
@@ -341,9 +456,36 @@ TEST(SpaceLogVectors, TheSignedBytesAreTheReferenceOnes) {
         wire->set("signature", std::string());
         wire->set("viaSignature", std::string());
         const SpaceStatement statement = statementOf(wire);
+        EXPECT_EQ(privmx::utils::Hex::from(statement.rosterHash), entry->getValue<std::string>("rosterHashHex"))
+            << "case " << i;
+        // The roster the chain adds up to, hashed here.
+        for (const auto& id : statement.removedGroups) {
+            groups.erase(
+                std::remove_if(groups.begin(), groups.end(), [&](const SpaceLogGroup& g) { return g.groupId == id; }),
+                groups.end()
+            );
+        }
+        for (const auto& id : statement.removedUsers) {
+            users.erase(
+                std::remove_if(users.begin(), users.end(), [&](const SpaceLogUser& u) { return u.userId == id; }),
+                users.end()
+            );
+        }
+        for (const auto& refresh : statement.refreshedGroups) {
+            for (auto& g : groups) {
+                if (g.groupId == refresh.groupId) {
+                    g.groupKeyVersion = refresh.groupKeyVersion;
+                    g.groupPubKey = refresh.groupPubKey;
+                }
+            }
+        }
+        groups.insert(groups.end(), statement.addedGroups.begin(), statement.addedGroups.end());
+        users.insert(users.end(), statement.addedUsers.begin(), statement.addedUsers.end());
+        EXPECT_EQ(privmx::utils::Hex::from(SpaceLog::rosterHash(groups, users)), entry->getValue<std::string>("rosterHashHex"))
+            << "case " << i;
         EXPECT_EQ(
-            privmx::utils::Hex::from(SpaceLog::recipientsHash(statement.groups, statement.users)),
-            entry->getValue<std::string>("recipientsHashHex")
+            privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(SpaceLog::signedBytes(statement))),
+            entry->getValue<std::string>("signedBytesSha256Hex")
         ) << "case " << i;
         EXPECT_EQ(privmx::utils::Hex::from(SpaceLog::signedBytes(statement)), entry->getValue<std::string>("signedBytesHex"))
             << "case " << i;
@@ -368,38 +510,38 @@ TEST(SpaceLogVectors, AKeyCommitmentIsTheReferenceOne) {
     }
 }
 
-TEST(SpaceLogVectors, AStatementSignedByTheBridgesOwnCodeVerifiesHere) {
-    // Made and signed by the Bridge's implementation (its SpaceStatement.test.ts, keys 0x11.. and 0x22..): the
-    // signatures of another library, and the digest that chains the next statement to this one.
-    const std::string json = R"({
-        "spaceId": "abababababababababababababababababababababababababababababababab",
-        "contextId": "ctx-1", "seq": 2,
-        "prevDigest": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
-        "op": "rotate", "date": 1700000000000, "keyVersion": 2,
-        "keyCommit": "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
-        "groups": [
-            {"groupId": "sales", "role": "manager", "groupKeyVersion": 5, "groupPubKey": "5RWLQudhUehv8bFcVwqJWBor8VTy4psRS2J2s9PwahRhw6fEVp"},
-            {"groupId": "billing", "role": "user", "groupKeyVersion": 1, "groupPubKey": "7S7oY6Jrjzq8txrPmBwUhUmKzpN64835E7ura1HDDAVUvqRjJ1"}
-        ],
-        "users": [
-            {"userId": "zoe", "pubKey": "5RWLQudhUehv8bFcVwqJWBor8VTy4psRS2J2s9PwahRhw6fEVp", "role": "user"},
-            {"userId": "alice", "pubKey": "7S7oY6Jrjzq8txrPmBwUhUmKzpN64835E7ura1HDDAVUvqRjJ1", "role": "manager"}
-        ],
-        "signer": "alice", "signerPubKey": "7S7oY6Jrjzq8txrPmBwUhUmKzpN64835E7ura1HDDAVUvqRjJ1", "via": "sales",
-        "signature": "G6mLHiR0fTTrDsC3Ke/uZ//1RYR40WbTjqQgaMXi5EWl/Kdmn5VvwLxr53bLfOAO3kAl3byD+sGQEfiEXasM4/4=",
-        "viaSignature": "G1TnXQdLHxn6nFvDK6rWIwDIni+O/xF6Vdw7uvenf/Ucnie6YGSnn65ks/MXkPIoQigIX0kTMIyGbbPtvqN/n80="
-    })";
-    const SpaceStatement statement = statementOf(privmx::utils::Utils::parseJsonObject(json));
-    EXPECT_EQ(
-        privmx::utils::Hex::from(SpaceLog::recipientsHash(statement.groups, statement.users)),
-        "4fb2f91ff12ef35fba60b41356dcdad801e2cc0a44c47acf42d066563cce7a7c"
-    );
-    EXPECT_EQ(privmx::utils::Hex::from(SpaceLog::digest(statement)), "81cb2d7e7415da314d438d87d4d2980688f92f7acdeabba2abda5571ad01809b");
-    using privmx::crypto::PublicKey;
-    EXPECT_TRUE(PublicKey::fromBase58DER(statement.signerPubKey).verifyCompactSignatureWithHash(SpaceLog::signedBytes(statement), statement.signature));
-    EXPECT_TRUE(PublicKey::fromBase58DER(statement.groups[0].groupPubKey).verifyCompactSignatureWithHash(SpaceLog::viaBytes(statement), statement.viaSignature));
-    // And not for a statement one byte off.
-    SpaceStatement other = statement;
-    other.date += 1;
-    EXPECT_FALSE(PublicKey::fromBase58DER(statement.signerPubKey).verifyCompactSignatureWithHash(SpaceLog::signedBytes(other), statement.signature));
+
+TEST_F(SpaceLogRules, ARungOpensOnlyUnderItsOwnKeyAndSpan) {
+    const std::string sealed = SpaceLog::sealRung(spaceId, 2, 1, key2, key1);
+    EXPECT_EQ(sealed.size(), 12u + 32u + 16u) << "iv || ciphertext || tag";
+    EXPECT_EQ(SpaceLog::openRung(spaceId, 2, 1, key2, sealed), key1);
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 2, 1, key1, sealed), GroupDataIntegrityException) << "another key";
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 3, 1, key2, sealed), GroupDataIntegrityException) << "relabelled";
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 2, 0, key2, sealed), GroupDataIntegrityException) << "relabelled";
+    EXPECT_THROW(SpaceLog::openRung(std::string(64, 'b'), 2, 1, key2, sealed), GroupDataIntegrityException)
+        << "another Space's";
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 2, 1, key2, sealed.substr(1)), GroupDataIntegrityException);
+    EXPECT_THROW(SpaceLog::sealRung(spaceId, 1, 2, key1, key2), std::invalid_argument) << "rungs point down only";
+}
+
+TEST_F(SpaceLogRules, AVerifiedStateIsStoredWholeAndReadBackStrictly) {
+    const SpaceLogState first = created();
+    const SpaceLogState rotated =
+        SpaceLog::apply(first, by(statement(SpaceOp::Rotate, first, 2, key2), "alice", alice));
+    std::map<std::string, SpaceLogState> states{{spaceId, rotated}};
+    const std::string body = SpaceLog::encodeStates(states);
+    const auto back = SpaceLog::decodeStates(body);
+    ASSERT_TRUE(back.has_value());
+    const SpaceLogState& again = back->at(spaceId);
+    EXPECT_EQ(again.seq, rotated.seq);
+    EXPECT_EQ(again.digest, rotated.digest);
+    EXPECT_EQ(again.creator, "alice");
+    EXPECT_EQ(again.keyCommits, rotated.keyCommits);
+    EXPECT_EQ(again.groups.size(), 2u);
+    EXPECT_EQ(again.users.size(), 2u);
+    // Good enough to go on from: the next statement applies to it as to the original.
+    EXPECT_NO_THROW(SpaceLog::apply(again, by(statement(SpaceOp::Rotate, again, 3, key1), "alice", alice)));
+    EXPECT_FALSE(SpaceLog::decodeStates(body + "x").has_value()) << "trailing bytes";
+    EXPECT_FALSE(SpaceLog::decodeStates(body.substr(0, body.size() - 1)).has_value()) << "cut short";
+    EXPECT_TRUE(SpaceLog::decodeStates(SpaceLog::encodeStates({})).has_value());
 }

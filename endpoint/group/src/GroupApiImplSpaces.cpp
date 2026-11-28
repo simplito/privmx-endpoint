@@ -9,12 +9,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Spaces: one symmetric key, in versions, wrapped for several groups and users. The Bridge stores the wraps and
-// nothing else; everything a reader relies on is checked here.
+// Spaces: one symmetric key, in versions. The current version is wrapped for each recipient; every later version
+// seals the earlier ones it skips to (the key ladder, `spaceRungsFor`), so an earlier version is read by descending
+// from the current key. The Bridge stores the wraps and the rungs and nothing else; everything a reader relies on is
+// checked here.
 //
 // What is and is not established:
-// - A version of the key is taken only from a wrap signed by a user the UserVerifier vouches for, for this Space,
-//   this version and this recipient. The Bridge cannot plant a key of its own.
+// - A version of the key is taken only if it is the one the Space's signed statements commit to (keyCommit), and the
+//   current one only from a wrap signed by a user the UserVerifier vouches for, for this Space, this version and
+//   this recipient. The Bridge cannot plant a key of its own, and a rung it forges does not pass the commit.
 // - The list of recipients is the Bridge's word, as a container's list of users is. Before a key is wrapped to a
 //   recipient, a group's key is read off its latest verified statement and a user's key goes to the UserVerifier.
 // - Whether an author still had access is not something the key shows: see `SpaceOrigin::authorAccess`.
@@ -35,6 +38,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/keytree/LadderMath.hpp"
 #include "privmx/endpoint/group/keytree/SpaceLog.hpp"
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/utils/Logger.hpp"
@@ -108,10 +112,7 @@ group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, boo
     if (spaceGeneration(spaceId) != generation) {
         return spaceInfo(spaceId, true, log); // sent before this process deleted or created the Space: not kept
     }
-    _spaces.set(
-        spaceId,
-        CachedSpace{.info = info, .readAt = now, .allVersions = true, .generation = generation, .log = verified}
-    );
+    _spaces.set(spaceId, CachedSpace{.info = info, .readAt = now, .generation = generation, .log = verified});
     if (log != nullptr) {
         *log = verified;
     }
@@ -147,75 +148,66 @@ std::vector<keytree::SpaceStatement> GroupApiImpl::spaceStatements(
     return statements;
 }
 
-// The device's memory of each Space: the last statement it verified. A Space served behind that, or with another
-// statement at that place, is a history that was rolled back or rewritten.
-// ponytail: the pin holds a position and a digest, not the state, so a new session replays the history from the
-// start (about a millisecond a statement). Keep the state in the pin when Spaces grow histories of thousands.
-std::map<std::string, std::pair<std::uint64_t, std::string>> GroupApiImpl::storedSpacePins() {
-    std::map<std::string, std::pair<std::uint64_t, std::string>> pins;
+// The device's memory of each Space: the whole state it last verified, so a new session verifies only the statements
+// since. A Space served behind that, or with a statement after it that does not follow it, is a history that was
+// rolled back or rewritten. Blob version 3 (`SpaceLog::encodeStates`, statements as deltas); a blob of an earlier
+// version (a position and digest only, or states of the full-roster statements a migration recreated) opens as
+// nothing: first contact again.
+// ponytail: one blob for every Space, rewritten whole on each save, ~250 B + 160 B a recipient + 32 B a key version
+// per Space. Thousands of Spaces with long histories make each save megabytes; a slot per Space if that bites.
+static constexpr std::uint8_t SPACE_PINS_VERSION = 3;
+
+std::map<std::string, keytree::SpaceLogState> GroupApiImpl::storedSpacePins() {
     if (!_pinStore) {
-        return pins;
+        return {};
     }
     const std::string slot = _connection.getImpl()->localStateSlot("space-pins", _userPrivKey.getPublicKey());
-    const core::LocalSeal seal(_userPrivKey, "privmx/space/pins", 1, slot);
+    const core::LocalSeal seal(_userPrivKey, "privmx/space/pins", SPACE_PINS_VERSION, slot);
     try {
         const std::string blob = _pinStore->load(slot).stdString();
         const auto body = blob.empty() ? std::nullopt : seal.open(blob);
-        std::istringstream lines(body.value_or(std::string()));
-        std::string spaceId, digest;
-        std::uint64_t seq = 0;
-        while (lines >> spaceId >> seq >> digest) {
-            pins[spaceId] = {seq, privmx::utils::Hex::toString(digest)};
+        if (body.has_value()) {
+            if (auto states = keytree::SpaceLog::decodeStates(body.value()); states.has_value()) {
+                return std::move(states.value());
+            }
+            LOG_WARN("[space pins] the stored pins do not decode")
         }
     } catch (const std::exception& e) { LOG_WARN("[space pins] the stored pins do not load: ", e.what()) }
-    return pins;
+    return {};
 }
 
-void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state, bool created) {
-    if (!_pinStore || !std::all_of(state.spaceId.begin(), state.spaceId.end(), [](unsigned char c) {
-            return std::isalnum(c) != 0;
-        })) {
+void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
+    if (!_pinStore) {
         return;
     }
     const std::string slot = _connection.getImpl()->localStateSlot("space-pins", _userPrivKey.getPublicKey());
-    const core::LocalSeal seal(_userPrivKey, "privmx/space/pins", 1, slot);
+    const core::LocalSeal seal(_userPrivKey, "privmx/space/pins", SPACE_PINS_VERSION, slot);
     const bool saved = seal.update(*_pinStore, [&](const std::optional<std::string>& body) {
-        // One line a Space: "<id> <seq> <digest hex>". Every Space this process verified is merged into every save,
-        // so a save that failed earlier is made up by the next one; the higher position stays. The pins loaded at
-        // first use are not: the store may have moved on since (this device created a Space again, here or in
-        // another process sharing the store). They only rebuild a stored blob that does not open (nothing stored,
-        // or corrupted). Read under the lock createSpace takes, so a Space created again meanwhile is respected.
-        std::map<std::string, std::pair<std::uint64_t, std::string>> pins;
-        std::istringstream lines(body.value_or(std::string()));
-        std::string spaceId, digest;
-        std::uint64_t seq = 0;
-        while (lines >> spaceId >> seq >> digest) {
-            pins[spaceId] = {seq, digest};
+        // Every Space this process verified is merged into every save, so a save that failed earlier is made up by
+        // the next one; the higher position stays. The states loaded at first use are not: the store may have moved
+        // on since (another process sharing it). They only rebuild a stored blob that does not open (nothing
+        // stored, of an earlier version, or corrupted).
+        std::map<std::string, keytree::SpaceLogState> states;
+        if (body.has_value()) {
+            states = keytree::SpaceLog::decodeStates(body.value()).value_or(states);
         }
+        const auto keep = [&](const keytree::SpaceLogState& next) {
+            const auto found = states.find(next.spaceId);
+            if (found == states.end() || next.seq >= found->second.seq) {
+                states[next.spaceId] = next;
+            }
+        };
         std::lock_guard lock(_spaceLogsMutex);
         if (!body.has_value()) {
-            for (const auto& [id, pin] : _spacePins) {
-                pins[id] = {pin.first, privmx::utils::Hex::from(pin.second)};
+            for (const auto& [id, pinned] : _spacePins) {
+                keep(pinned);
             }
         }
         for (const auto& [id, log] : _spaceLogs) {
-            if (log.seq >= pins[id].first) {
-                pins[id] = {log.seq, privmx::utils::Hex::from(log.digest)};
-            }
+            keep(log);
         }
-        auto& pin = pins[state.spaceId];
-        if (created || state.seq >= pin.first) {
-            pin = {state.seq, privmx::utils::Hex::from(state.digest)};
-        }
-        std::string out;
-        for (const auto& [id, entry] : pins) {
-            if (!std::all_of(id.begin(), id.end(), [](unsigned char c) { return std::isalnum(c) != 0; }) ||
-                id.empty()) {
-                continue; // no id with a space or a line break makes a line of its own
-            }
-            out += id + " " + std::to_string(entry.first) + " " + entry.second + "\n";
-        }
-        return out;
+        keep(state);
+        return keytree::SpaceLog::encodeStates(states);
     });
     if (!saved) {
         LOG_WARN("[space pins] the store kept changing under the save of Space ", state.spaceId, "; not saved")
@@ -236,7 +228,7 @@ std::optional<keytree::SpaceLogState> GroupApiImpl::spaceLogOf(const std::string
     return found == _spaceLogs.end() ? std::nullopt : std::optional<keytree::SpaceLogState>(found->second);
 }
 
-void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state, bool created) {
+void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state) {
     {
         // Only forward, under one lock: two reads racing must not leave the earlier state as the mark.
         std::lock_guard lock(_spaceLogsMutex);
@@ -249,7 +241,7 @@ void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state, bool cr
     // The Bridge has taken the change, or the read is done: a store that fails is logged, never the caller's error.
     // The next save carries this Space again.
     try {
-        storeSpacePin(state, created);
+        storeSpacePin(state);
     } catch (const std::exception& e) { LOG_WARN("[space pins] save dropped: ", e.what()) } catch (...) {
         LOG_WARN("[space pins] save dropped")
     }
@@ -266,8 +258,10 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
         return GroupHistoryForkException("Space " + space.id + ": " + what);
     };
     std::optional<keytree::SpaceLogState> state = spaceLogOf(space.id);
-    std::optional<std::pair<std::uint64_t, std::string>> stored;
+    std::optional<std::uint64_t> deviceSeq; // where the state taken from the device's store stops
     if (!state.has_value()) {
+        // The state this device verified before, if any: the replay goes on from it, and its digest is what the next
+        // statement must follow (`SpaceLog::apply`).
         {
             std::lock_guard lock(_spaceLogsMutex);
             if (!_spacePinsLoaded) {
@@ -275,14 +269,25 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
                 _spacePinsLoaded = true;
             }
             if (const auto pin = _spacePins.find(space.id); pin != _spacePins.end()) {
-                stored = pin->second;
+                state = pin->second;
+                deviceSeq = state->seq;
             }
         }
-        if (stored.has_value() && static_cast<std::uint64_t>(space.seq) < stored->first) {
+        if (state.has_value() && static_cast<std::uint64_t>(space.seq) < state->seq) {
             throw fork("served behind the history this device has verified");
+        }
+        // Served at the very statement this device stopped at: no later one shows the chain, so that one is read.
+        if (state.has_value() && static_cast<std::uint64_t>(space.seq) == state->seq) {
+            const auto at = spaceStatements(space.id, space.seq - 1, space.seq);
+            if (at.size() != 1 || keytree::SpaceLog::digest(at.front()) != state->digest) {
+                throw fork("another statement where this device verified one");
+            }
         }
     } else if (static_cast<std::uint64_t>(space.seq) < state->seq) {
         throw fork("served behind the history this process has verified");
+    }
+    if (state.has_value() && state->contextId != space.contextId) {
+        throw GroupDataIntegrityException("Space " + space.id + ": served in another Context than it was verified in");
     }
     if (!state.has_value() || state->seq < static_cast<std::uint64_t>(space.seq)) {
         std::vector<core::UserWithPubKey> signers;
@@ -292,26 +297,22 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
             if (statement.spaceId != space.id || statement.contextId != space.contextId) {
                 throw GroupDataIntegrityException("space statement: of another Space");
             }
-            const std::optional<keytree::SpaceLogState> before = state;
+            if (deviceSeq.has_value() &&
+                statement.seq == deviceSeq.value() + 1 &&
+                statement.prevDigest != state->digest) {
+                throw fork("another statement where this device verified one");
+            }
             state = keytree::SpaceLog::apply(state, statement);
             signers.push_back(core::UserWithPubKey{.userId = statement.signer, .pubKey = statement.signerPubKey});
-            for (const keytree::SpaceLogGroup& group : state->groups) {
-                const keytree::SpaceLogGroup* was = before.has_value() ? before->group(group.groupId) : nullptr;
-                if (was != nullptr &&
-                    (was->groupKeyVersion != group.groupKeyVersion || was->groupPubKey != group.groupPubKey)) {
-                    refreshes.push_back(
-                        GroupKeyRefresh{
-                            .seq = statement.seq,
-                            .groupId = group.groupId,
-                            .groupKeyVersion = group.groupKeyVersion,
-                            .groupPubKey = group.groupPubKey,
-                            .byGroup = !statement.via.empty(),
-                        }
-                    );
-                }
-            }
-            if (stored.has_value() && state->seq == stored->first && state->digest != stored->second) {
-                throw fork("another statement where this device verified one");
+            for (const keytree::SpaceLogGroup& group : statement.refreshedGroups) {
+                refreshes.push_back(
+                    GroupKeyRefresh{
+                        .seq = statement.seq,
+                        .groupId = group.groupId,
+                        .groupKeyVersion = group.groupKeyVersion,
+                        .groupPubKey = group.groupPubKey,
+                    }
+                );
             }
         }
         // The statements name their signers' keys; whether those users hold them is the application's to say. Asked
@@ -351,12 +352,11 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
 }
 
 // SECURITY: a group's pinned key in a Space's log is what "signed via that group" is checked against from then on,
-// so a refresh of it is held to the group's own verified history, not taken from whoever signed it. Through the group
-// itself (anyone who ever held one of its keys, a removed member too) it must be a key that group had at that epoch,
-// as this client can verify it: one of its epoch keys for a member, else the key G's verified chain of statements
-// opened that epoch with (the Bridge serves the chain to whoever may read the group's public info), or its verified
-// current key. A manager signing as a user could replace the group anyway: refused only when that is shown wrong
-// (ahead of the group, or another key at that epoch). What cannot be verified is refused.
+// so a refresh of it is held to the group's own verified history, whoever signed it (any recipient may: the Bridge
+// lets any recipient rotate). Whatever this client can verify, it does: one of the group's epoch keys for a member,
+// its verified current key, or the key its verified chain of statements opened a past epoch with (the Bridge serves
+// the chain to whoever may read the group's public info). A key shown wrong is refused; one nothing here can verify
+// (a group hidden from this reader) is taken as signed - see `refusedRefresh` for what that leaves open.
 void GroupApiImpl::requireGroupKeyRefreshesHold(
     const std::string& contextId,
     const std::vector<GroupKeyRefresh>& refreshes
@@ -374,36 +374,37 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
     // key, and every refresh of it is then refused.
     const auto epochs = fetchGroupEpochs(contextId, groupIds);
     // Each group's grant key per past epoch, off its verified chain (`epochOpeners`: fetched once a group, only the
-    // statements since on a later replay). Empty when the chain cannot be read: such a refresh is then unverifiable.
+    // statements since on a later replay). A chain that fails to read throws: a failed read is never "nothing to
+    // verify", which would take the refresh as signed.
     std::map<std::string, std::map<std::uint64_t, std::string>> chainKeys;
     const auto chainKeyAt = [&](const std::string& groupId, std::uint64_t epoch) -> std::optional<std::string> {
         auto chain = chainKeys.find(groupId);
         if (chain == chainKeys.end()) {
-            chain = chainKeys.emplace(groupId, std::map<std::uint64_t, std::string>()).first;
-            try {
-                for (const auto& [at, opener] : _treeVerifier.epochOpeners(
-                         groupId, contextId, VerifiedGroup::treeEnvironment(_serverApi, _connection, groupId)
-                     )) {
-                    chain->second[at] = opener.groupPubKey;
-                }
-            } catch (const std::exception& e) {
-                LOG_WARN("[space log] group ", groupId, " shows no verifiable chain to this caller: ", e.what())
+            std::map<std::uint64_t, std::string> keys;
+            for (const auto& [at, opener] : _treeVerifier.epochOpeners(
+                     groupId, contextId, VerifiedGroup::treeEnvironment(_serverApi, _connection, groupId)
+                 )) {
+                keys[at] = opener.groupPubKey;
             }
+            chain = chainKeys.emplace(groupId, std::move(keys)).first;
         }
         const auto key = chain->second.find(epoch);
         return key == chain->second.end() ? std::nullopt : std::optional<std::string>(key->second);
     };
-    // Whether the Bridge says outright that this caller may not see the group (a members-only group it is not in).
-    // A network failure or any other answer is no such word: the refresh stays unverifiable, and is refused.
+    // Whether the group shows this caller nothing: the Bridge says outright that it may not see it (a members-only
+    // group it is not in) or that there is none. Any other failure is thrown, for the same reason as above.
     const auto hiddenFromCaller = [&](const std::string& groupId) {
         try {
             server::GroupGetPublicKeyModel model;
             model.groupId = groupId;
             _serverApi.groupGetPublicKey(model);
         } catch (const core::Exception& e) {
-            return e.getCode() == privmx::endpoint::server::GroupDoesNotExistException().getCode() ||
-                e.getCode() == privmx::endpoint::server::AccessDeniedException().getCode();
-        } catch (...) {}
+            if (e.getCode() == privmx::endpoint::server::GroupDoesNotExistException().getCode() ||
+                e.getCode() == privmx::endpoint::server::AccessDeniedException().getCode()) {
+                return true;
+            }
+            throw;
+        }
         return false;
     };
     for (const GroupKeyRefresh& refresh : refreshes) {
@@ -411,8 +412,9 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
         std::optional<std::int64_t> memberEpoch;
         try {
             core::Validator::validateId(refresh.groupId, "field:space.groups.groupId ");
-            _keys.grantKeyForPubKey(refresh.groupId, refresh.groupPubKey);
-            memberEpoch = _keys.grantEpochOf(refresh.groupId, refresh.groupPubKey);
+            std::int64_t epoch = 0;
+            _keys.grantKeyForPubKey(refresh.groupId, refresh.groupPubKey, &epoch);
+            memberEpoch = epoch;
         } catch (const GroupHistoryForkException&) {
             throw; // a history that does not hold is the answer, never "not a key of it"
         } catch (const GroupDataIntegrityException&) { throw; } catch (const std::exception&) {
@@ -421,18 +423,26 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
         const std::optional<core::GroupEpochInfo> current = epoch == epochs.end() ?
             std::nullopt :
             std::optional<core::GroupEpochInfo>(epoch->second);
+        const bool member = memberEpoch.has_value() && memberEpoch.value() > 0;
+        // No verified epoch of a group the caller can see: its history did not verify (a fork, a pin it is behind),
+        // so the key cannot be checked although it should be. Only a group that shows the caller nothing at all is
+        // "cannot verify".
+        if (!member && !current.has_value() && !hiddenFromCaller(refresh.groupId)) {
+            throw GroupUnauthorizedSignerException(
+                "space statement " +
+                std::to_string(refresh.seq) +
+                ": group " +
+                refresh.groupId +
+                " is visible to this caller but its key could not be verified"
+            );
+        }
         // A past epoch, below the group's verified current one, with no key of the caller's own to compare.
         const bool past = !(memberEpoch.has_value() && memberEpoch.value() > 0) &&
             current.has_value() &&
             refresh.groupKeyVersion < static_cast<std::uint64_t>(current->keyVersion);
-        // No view of the group at all: no key of it, no verified epoch, and the Bridge says it is hidden from us.
-        const bool hidden = refresh.byGroup &&
-            !(memberEpoch.has_value() && memberEpoch.value() > 0) &&
-            !current.has_value() &&
-            hiddenFromCaller(refresh.groupId);
         if (const auto why = refusedRefresh(
                 refresh, memberEpoch, current,
-                past ? chainKeyAt(refresh.groupId, refresh.groupKeyVersion) : std::nullopt, hidden
+                past ? chainKeyAt(refresh.groupId, refresh.groupKeyVersion) : std::nullopt
             )) {
             throw GroupUnauthorizedSignerException(
                 "space statement " + std::to_string(refresh.seq) + ": group " + refresh.groupId + " " + why.value()
@@ -445,8 +455,7 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
     const GroupKeyRefresh& refresh,
     std::optional<std::int64_t> memberEpoch,
     const std::optional<core::GroupEpochInfo>& current,
-    const std::optional<std::string>& chainKey,
-    bool groupHidden
+    const std::optional<std::string>& chainKey
 ) {
     if (memberEpoch.has_value() && memberEpoch.value() > 0) {
         return memberEpoch.value() == static_cast<std::int64_t>(refresh.groupKeyVersion) ?
@@ -475,17 +484,16 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
             std::nullopt :
             std::optional<std::string>("had another key at that epoch");
     }
-    // A group hidden from this reader leaves nothing to hold the refresh to; the via signature SpaceLog::apply
-    // checked is then the proof. Only a holder of the group's pinned key makes it: a current member (an insider) or
-    // one just removed (freshness, out of scope). Readers who can see the group still verify the key above.
-    if (refresh.byGroup && !groupHidden) {
-        return "refreshed through a group to a key this client cannot verify";
-    }
+    // Nothing to hold it to (a group that shows this reader nothing, or an epoch its verified chain does not have): taken
+    // from whichever recipient signed it. Owner decision 2026-11-27, a known gap: a lying Bridge and a current member
+    // of the Space can so give this reader a made-up key for the group, then sign "via" it as that group, and show a
+    // reader who cannot see the group a made-up roster (about CVSS 4.2). Readers who can see the group refuse it.
     return std::nullopt;
 }
 
 // A statement by the caller, in whichever standing they have: as a recipient themselves, or through a recipient
-// group they are in - shown by signing with that group's key.
+// group they are in - shown by signing with that group's key. A manager's standing first, when the caller has one:
+// only a manager's rotation may prune (`replaceSpaceKey`), and a change of the recipients needs one.
 keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
     keytree::SpaceStatement statement,
     const std::optional<keytree::SpaceLogState>& prior
@@ -495,52 +503,38 @@ keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
     statement.date = static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp());
     statement.signer = _connection.getImpl()->getMyUserId(statement.contextId);
     const std::string ownPubKey = _userPrivKey.getPublicKey().toBase58DER();
-    const bool needManager = statement.op != keytree::SpaceOp::Rotate;
-    const auto& users = prior.has_value() ? prior->users : statement.users;
-    const auto& groups = prior.has_value() ? prior->groups : statement.groups;
-    // Each standing the caller has is tried until the statement is one that may follow: a group's key, for one,
-    // is refreshed by a manager or through that very group, so the first standing found is not always the one.
-    std::optional<GroupUnauthorizedSignerException> refused;
-    const auto follows = [&](const keytree::SpaceStatement& candidate) {
-        try {
-            keytree::SpaceLog::apply(prior, candidate);
-            return true;
-        } catch (const GroupUnauthorizedSignerException& e) {
-            refused = e;
-            return false;
+    const auto& users = prior.has_value() ? prior->users : statement.addedUsers;
+    const auto& groups = prior.has_value() ? prior->groups : statement.addedGroups;
+    for (const bool asManager : {true, false}) {
+        if (!asManager && statement.op != keytree::SpaceOp::Rotate) {
+            break;
         }
-    };
-    for (const keytree::SpaceLogUser& user : users) {
-        if (user.userId == statement.signer && user.pubKey == ownPubKey && (!needManager || user.role == "manager")) {
-            statement.via.clear();
-            keytree::SpaceLog::sign(statement, _userPrivKey, std::nullopt);
-            if (follows(statement)) {
+        for (const keytree::SpaceLogUser& user : users) {
+            if (user.userId == statement.signer && user.pubKey == ownPubKey && (user.role == "manager") == asManager) {
+                statement.via.clear();
+                keytree::SpaceLog::sign(statement, _userPrivKey, std::nullopt);
                 return statement;
             }
         }
-    }
-    for (const keytree::SpaceLogGroup& group : groups) {
-        if (needManager && group.role != "manager") {
-            continue;
-        }
-        std::optional<privmx::crypto::PrivateKey> groupKey;
-        try {
-            core::Validator::validateId(group.groupId, "field:space.groups.groupId ");
-            groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
-        } catch (const core::Exception&) {
-            continue; // not a group of the caller's
-        }
-        statement.via = group.groupId;
-        keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
-        if (follows(statement)) {
+        for (const keytree::SpaceLogGroup& group : groups) {
+            if ((group.role == "manager") != asManager) {
+                continue;
+            }
+            std::optional<privmx::crypto::PrivateKey> groupKey;
+            try {
+                core::Validator::validateId(group.groupId, "field:space.groups.groupId ");
+                groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
+            } catch (const core::Exception&) {
+                continue; // not a group of the caller's
+            }
+            statement.via = group.groupId;
+            keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
             return statement;
         }
     }
-    if (refused.has_value()) {
-        throw refused.value();
-    }
     throw GroupUnauthorizedSignerException(
-        needManager ? "only a manager of the Space changes its recipients" : "the caller is no recipient of the Space"
+        statement.op != keytree::SpaceOp::Rotate ? "only a manager of the Space changes its recipients" :
+                                                   "the caller is no recipient of the Space"
     );
 }
 
@@ -572,24 +566,24 @@ core::PagingList<SpaceLogEntry> GroupApiImpl::getSpaceLog(
             .addedUsers = {},
             .removedGroups = {},
             .removedUsers = {},
+            .refreshedGroups = {},
         };
-        for (const auto& group : next.groups) {
-            if (!state.has_value() || state->group(group.groupId) == nullptr)
-                entry.addedGroups.push_back(group.groupId);
+        for (const auto& group : statement.addedGroups) {
+            entry.addedGroups.push_back(group.groupId);
         }
-        for (const auto& user : next.users) {
-            if (!state.has_value() || state->roleOfUser(user.userId).empty())
-                entry.addedUsers.push_back(user.userId);
+        for (const auto& user : statement.addedUsers) {
+            entry.addedUsers.push_back(user.userId);
         }
-        if (state.has_value()) {
-            for (const auto& group : state->groups) {
-                if (next.group(group.groupId) == nullptr)
-                    entry.removedGroups.push_back(group.groupId);
-            }
-            for (const auto& user : state->users) {
-                if (next.roleOfUser(user.userId).empty())
-                    entry.removedUsers.push_back(user.userId);
-            }
+        entry.removedGroups = statement.removedGroups;
+        entry.removedUsers = statement.removedUsers;
+        for (const auto& group : statement.refreshedGroups) {
+            entry.refreshedGroups.push_back(
+                SpaceGroupRecipient{
+                    .groupId = group.groupId,
+                    .role = next.group(group.groupId)->role,
+                    .keyVersion = static_cast<int64_t>(group.groupKeyVersion),
+                }
+            );
         }
         entries.push_back(std::move(entry));
         state = next;
@@ -621,7 +615,7 @@ std::uint64_t GroupApiImpl::spaceGeneration(const std::string& spaceId) {
 void GroupApiImpl::dropSpace(const std::string& spaceId) {
     {
         // A new generation: an answer to a request sent before the delete is not kept. The verified history stays:
-        // a Space that comes back under this id is held to it, unless this process creates it again (`createSpace`).
+        // the Bridge never serves another Space under this id, so anything served under it is held to that history.
         std::lock_guard lock(_spaceLogsMutex);
         ++_spaceGenerations[spaceId];
     }
@@ -637,23 +631,194 @@ void GroupApiImpl::dropSpace(const std::string& spaceId) {
     }
 }
 
+// The key of a version: the one the statement that made it committed to, or the Bridge has served another.
+static bool spaceKeyCommitted(
+    const std::optional<keytree::SpaceLogState>& log,
+    const std::string& spaceId,
+    std::int64_t keyVersion,
+    const std::string& key
+) {
+    const auto commit = log.has_value() ? log->keyCommits.find(static_cast<std::uint64_t>(keyVersion)) :
+                                          std::map<std::uint64_t, std::string>::const_iterator{};
+    return log.has_value() &&
+        commit != log->keyCommits.end() &&
+        commit->second == keytree::SpaceLog::keyCommit(spaceId, static_cast<std::uint64_t>(keyVersion), key);
+}
+
 GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInfo& space, std::int64_t keyVersion) {
-    const std::string cacheKey = space.id + ":" + std::to_string(keyVersion);
-    // A key cached from an entry this read no longer serves (a Space deleted and created again, a read from before
-    // that) is not this read's key: unwrapped again.
+    if (keyVersion < 1 || keyVersion > space.keyVersion) {
+        throw EnvelopeNotARecipientException("no key of the Space at version " + std::to_string(keyVersion));
+    }
+    if (space.keyVersion > static_cast<std::int64_t>(UINT32_MAX)) {
+        throw GroupDataIntegrityException("Space " + space.id + ": a key version past the ladder's range");
+    }
+    // A delete moves the generation: nothing opened before it is used after (`dropSpace`).
+    const std::string prefix = space.id + ":" + std::to_string(spaceGeneration(space.id)) + ":";
+    const std::string cacheKey = prefix + std::to_string(keyVersion);
+    if (keyVersion < space.keyVersion) {
+        if (const auto cached = _spaceKeys.get(cacheKey); cached.has_value()) {
+            return cached.value(); // an earlier version, opened once already
+        }
+        // Down the ladder from the current key (LadderMath::walkDown, as a group's epochs), starting from the deepest
+        // version already held on the canonical path. What is the Space's own: a rung is a symmetric seal
+        // (`SpaceLog::openRung`), unsigned, so each key it gives is held to the version's keyCommit.
+        const auto path = keytree::LadderMath::canonicalDescent(
+            static_cast<std::uint32_t>(space.keyVersion), static_cast<std::uint32_t>(keyVersion), 1
+        );
+        std::uint32_t from = static_cast<std::uint32_t>(space.keyVersion);
+        std::string key;
+        for (std::size_t i = path.size(); i-- > 0 && key.empty();) {
+            if (const auto cached = _spaceKeys.get(prefix + std::to_string(path[i].target)); cached.has_value()) {
+                from = path[i].target;
+                key = cached->key;
+            }
+        }
+        if (key.empty()) {
+            key = spaceKeyAt(space, space.keyVersion).key;
+        }
+        struct Rung {
+            keytree::RungSpan span;
+            std::string data; // base64, as served
+        };
+        const std::uint32_t goal = static_cast<std::uint32_t>(keyVersion);
+        // What `spaceGetKeyArchive` served: each version's rungs (a version fetched is one key here, even with none),
+        // and the caller's own wraps of earlier versions that still have them.
+        std::map<std::uint32_t, std::vector<Rung>> served;
+        std::vector<group::server::SpaceKeyEntry> ownWraps;
+        const auto fetch = [&](std::uint32_t low, std::uint32_t high) {
+            while (low <= high) {
+                group::server::SpaceGetKeyArchiveModel model;
+                model.id = space.id;
+                model.fromKeyVersion = low;
+                model.toKeyVersion = high;
+                const auto page = _serverApi.spaceGetKeyArchive(model);
+                const std::uint32_t pageEnd = page.nextKeyVersion.has_value() &&
+                        page.nextKeyVersion.value() > low &&
+                        page.nextKeyVersion.value() <= static_cast<std::int64_t>(high) ?
+                    static_cast<std::uint32_t>(page.nextKeyVersion.value() - 1) :
+                    high;
+                for (std::uint32_t version = low; version <= pageEnd; ++version) {
+                    served[version].clear();
+                }
+                for (const group::server::SpaceRung& rung : page.rungs) {
+                    if (rung.targetKeyVersion > 0 &&
+                        rung.targetKeyVersion < rung.atKeyVersion &&
+                        rung.atKeyVersion >= low &&
+                        rung.atKeyVersion <= pageEnd) {
+                        served[static_cast<std::uint32_t>(rung.atKeyVersion)].push_back(
+                            Rung{
+                                .span =
+                                    {static_cast<std::uint32_t>(rung.atKeyVersion),
+                                     static_cast<std::uint32_t>(rung.targetKeyVersion)},
+                                .data = rung.data,
+                            }
+                        );
+                    }
+                }
+                ownWraps.insert(ownWraps.end(), page.keys.begin(), page.keys.end());
+                if (pageEnd >= high) {
+                    break;
+                }
+                low = pageEnd + 1;
+            }
+        };
+        const auto log = spaceLogOf(space.id);
+        const auto descend = [&](std::uint32_t start, const std::string& startKey) {
+            return keytree::LadderMath::walkDown(
+                start, goal, startKey, UINT32_MAX,
+                [&](std::uint32_t at) -> const std::vector<Rung>& {
+                    // Only this version's rungs: a descent of n versions asks about 2*log2(n) times, never the range.
+                    if (served.count(at) == 0) {
+                        fetch(at, at);
+                    }
+                    return served[at];
+                },
+                [&](const Rung& rung, const std::string& atKey) -> std::optional<std::string> {
+                    try {
+                        return keytree::SpaceLog::openRung(
+                            space.id, rung.span.at, rung.span.target, atKey, privmx::utils::Base64::toString(rung.data)
+                        );
+                    } catch (...) { return std::nullopt; }
+                },
+                [&](std::uint32_t target, const std::string& targetKey) {
+                    return spaceKeyCommitted(log, space.id, target, targetKey);
+                },
+                [&](const Rung& rung, bool opened) {
+                    LOG_WARN(
+                        "[spaceKeyAt] space ", space.id, " rung ", rung.span.at, "->", rung.span.target,
+                        opened ? " opened to a key its version did not commit to" : " did not open"
+                    )
+                },
+                [&](const Rung& rung, const std::string& targetKey) {
+                    _spaceKeys.set(
+                        prefix + std::to_string(rung.span.target), SpaceKeyUse{.key = targetKey, .via = {}, .wrap = {}}
+                    );
+                }
+            );
+        };
+        const auto walk = descend(from, key);
+        if (walk.end == keytree::LadderWalkEnd::Reached) {
+            return SpaceKeyUse{.key = walk.key, .via = {}, .wrap = {}};
+        }
+        // A rung that does not lead on: any recipient may rotate, and the Bridge cannot check a symmetric rung, so a
+        // rotation keeps the older wraps unless a manager asks for a prune after checking every rung since the last one.
+        // The caller's own wrap of `keyVersion`, or of a version between it and where the walk stopped from which the
+        // ladder works, is the way round.
+        fetch(goal, walk.reached - 1);
+        for (std::uint32_t version = goal; version < walk.reached; ++version) {
+            const auto atVersion = [&](const group::server::SpaceKeyEntry& entry) {
+                return entry.keyVersion == version;
+            };
+            if (std::none_of(ownWraps.begin(), ownWraps.end(), atVersion)) {
+                continue;
+            }
+            std::optional<SpaceKeyUse> use;
+            try {
+                use = unwrapOwnSpaceKey(space, version, ownWraps);
+            } catch (const std::exception&) {
+                continue; // logged; perhaps another version's opens
+            }
+            _spaceKeys.set(prefix + std::to_string(version), use.value());
+            if (version == goal) {
+                return use.value();
+            }
+            if (const auto again = descend(version, use->key); again.end == keytree::LadderWalkEnd::Reached) {
+                return SpaceKeyUse{.key = again.key, .via = {}, .wrap = {}};
+            }
+        }
+        throw GroupDataIntegrityException(
+            "Space " +
+            space.id +
+            ": the key ladder does not lead from version " +
+            std::to_string(walk.reached) +
+            " to " +
+            std::to_string(keyVersion) +
+            ", and the caller has no wrap of a version on the way"
+        );
+    }
     if (const auto cached = _spaceKeys.get(cacheKey); cached.has_value() &&
         std::any_of(space.keys.begin(), space.keys.end(), [&](const group::server::SpaceKeyEntry& entry) {
                                                           return entry.keyVersion == keyVersion &&
                                                               entry.data == cached->wrap;
                                                       })) {
-        return cached.value();
+        return cached.value(); // still the entry the read serves
     }
+    const SpaceKeyUse use = unwrapOwnSpaceKey(space, keyVersion, space.keys);
+    _spaceKeys.set(cacheKey, use);
+    return use;
+}
+
+GroupApiImpl::SpaceKeyUse GroupApiImpl::unwrapOwnSpaceKey(
+    const group::server::SpaceInfo& space,
+    std::int64_t keyVersion,
+    const std::vector<group::server::SpaceKeyEntry>& entries
+) {
     const std::string ownUserId = _connection.getImpl()->getMyUserId(space.contextId);
     const std::string ownPubKey = _userPrivKey.getPublicKey().toBase58DER();
     std::exception_ptr lastFailure;
     // The caller's own entry first (no request), then the entries of the groups it is in.
     for (const bool wantGroup : {false, true}) {
-        for (const group::server::SpaceKeyEntry& entry : space.keys) {
+        for (const group::server::SpaceKeyEntry& entry : entries) {
             const bool isGroup = entry.recipient.groupId.has_value();
             if (entry.keyVersion != keyVersion || isGroup != wantGroup) {
                 continue;
@@ -692,20 +857,10 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
                 );
                 // The key itself: the one the statement that made this version committed to, or the Bridge has
                 // stored a wrap of another.
-                const auto log = spaceLogOf(space.id);
-                const auto commit = log.has_value() ? log->keyCommits.find(static_cast<std::uint64_t>(keyVersion)) :
-                                                      std::map<std::uint64_t, std::string>::const_iterator{};
-                if (!log.has_value() ||
-                    commit == log->keyCommits.end() ||
-                    commit->second !=
-                        keytree::SpaceLog::keyCommit(space.id, static_cast<std::uint64_t>(keyVersion), key)) {
+                if (!spaceKeyCommitted(spaceLogOf(space.id), space.id, keyVersion, key)) {
                     throw GroupDataIntegrityException("not the key the Space's statements name for this version");
                 }
-                const SpaceKeyUse use{
-                    .key = key, .via = isGroup ? slot.recipientId : std::string(), .wrap = entry.data
-                };
-                _spaceKeys.set(cacheKey, use);
-                return use;
+                return SpaceKeyUse{.key = key, .via = isGroup ? slot.recipientId : std::string(), .wrap = entry.data};
             } catch (const std::exception& e) {
                 LOG_WARN(
                     "[spaceKeyAt] space ", space.id, " version ", keyVersion, ": an entry did not open: ", e.what()
@@ -718,6 +873,139 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
         std::rethrow_exception(lastFailure);
     }
     throw EnvelopeNotARecipientException("no entry of the Space's key, version " + std::to_string(keyVersion));
+}
+
+std::pair<std::vector<group::server::SpaceRung>, bool> GroupApiImpl::spaceLadderRepairs(
+    const group::server::SpaceInfo& space,
+    std::size_t room
+) {
+    // ponytail: every version since the last prune is checked, so after a very long run of member-only rotations
+    // one manager rotation pages the whole unpruned range once; a prune resets it.
+    static constexpr std::size_t MAX_RUNGS_PER_SPAN = 4; // the Bridge refuses a fifth
+    const std::int64_t high = space.keyVersion;          // the new version's own rungs are written with it
+    const std::int64_t low = std::clamp<std::int64_t>(space.keysPrunedBelow.value_or(0), 0, high) + 1;
+    // Every rung served for the versions in range, by span: one that opens to the committed key is enough. The check
+    // is optional: if the archive cannot be read (an ACL without spaceGetKeyArchive, a network error), the rotation
+    // goes ahead with no repairs and no prune.
+    std::map<std::pair<std::int64_t, std::int64_t>, std::vector<std::string>> served;
+    try {
+        for (std::int64_t from = low; from <= high;) {
+            group::server::SpaceGetKeyArchiveModel model;
+            model.id = space.id;
+            model.fromKeyVersion = from;
+            model.toKeyVersion = high;
+            const auto page = _serverApi.spaceGetKeyArchive(model);
+            for (const group::server::SpaceRung& rung : page.rungs) {
+                served[{rung.atKeyVersion, rung.targetKeyVersion}].push_back(rung.data);
+            }
+            if (!page.nextKeyVersion.has_value() || page.nextKeyVersion.value() <= from) {
+                break;
+            }
+            from = page.nextKeyVersion.value();
+        }
+    } catch (const std::exception& e) {
+        LOG_WARN("[space ladder] space ", space.id, ": the archive did not read, nothing pruned: ", e.what())
+        return {{}, false};
+    }
+    const auto log = spaceLogOf(space.id);
+    const std::string prefix = space.id + ":" + std::to_string(spaceGeneration(space.id)) + ":";
+    // The key a candidate rung of (at -> target) gives, if it is the committed one.
+    const auto opened = [&](std::int64_t at, std::int64_t target,
+                            const std::string& atKey) -> std::optional<std::string> {
+        for (const std::string& data : served[{at, target}]) {
+            try {
+                std::string key = keytree::SpaceLog::openRung(
+                    space.id, static_cast<std::uint64_t>(at), static_cast<std::uint64_t>(target), atKey,
+                    privmx::utils::Base64::toString(data)
+                );
+                if (spaceKeyCommitted(log, space.id, target, key)) {
+                    return key;
+                }
+            } catch (...) {}
+        }
+        return std::nullopt;
+    };
+    // The keys top-down off the unit rungs already fetched, each verified and kept for later reads; spaceKeyAt (more
+    // requests: descent, own wraps) only where none opens, and for a skip target below the range.
+    std::map<std::int64_t, std::optional<std::string>> keys; // nullopt: out of reach, tried once
+    const auto keyAt = [&](std::int64_t version) -> std::optional<std::string> {
+        if (const auto known = keys.find(version); known != keys.end()) {
+            return known->second;
+        }
+        try {
+            return keys[version] = spaceKeyAt(space, version).key;
+        } catch (const std::exception& e) {
+            LOG_WARN("[space ladder] space ", space.id, " version ", version, " is out of reach: ", e.what())
+            return keys[version] = std::nullopt;
+        }
+    };
+    if (!keyAt(high).has_value()) {
+        return {{}, false};
+    }
+    for (std::int64_t version = high - 1; version >= std::max<std::int64_t>(low - 1, 1); --version) {
+        const auto above = keys.find(version + 1);
+        if (above == keys.end() || !above->second.has_value()) {
+            keyAt(version);
+            continue;
+        }
+        if (const auto key = opened(version + 1, version, above->second.value()); key.has_value()) {
+            keys[version] = key.value();
+            _spaceKeys.set(prefix + std::to_string(version), SpaceKeyUse{.key = key.value(), .via = {}, .wrap = {}});
+        } else {
+            keyAt(version);
+        }
+    }
+
+    bool prune = true;
+    std::vector<group::server::SpaceRung> repairs;
+    for (std::int64_t at = std::max<std::int64_t>(low, 2); at <= high; ++at) {
+        const auto atKey = keyAt(at);
+        if (!atKey.has_value()) {
+            prune = false;
+            continue;
+        }
+        for (const keytree::RungSpan& span : keytree::LadderMath::rungSpansFor(static_cast<std::uint32_t>(at), 1)) {
+            if (opened(span.at, span.target, atKey.value()).has_value()) {
+                continue;
+            }
+            const auto targetKey = keyAt(span.target);
+            // Not repaired: a key out of reach, a span already full (the Bridge would refuse the whole request), or no
+            // room left in this request. The rotation goes ahead without a prune.
+            if (!targetKey.has_value() ||
+                served[{span.at, span.target}].size() >= MAX_RUNGS_PER_SPAN ||
+                repairs.size() >= room) {
+                prune = false;
+                continue;
+            }
+            group::server::SpaceRung rung;
+            rung.atKeyVersion = span.at;
+            rung.targetKeyVersion = span.target;
+            rung.data = privmx::utils::Base64::from(
+                keytree::SpaceLog::sealRung(space.id, span.at, span.target, atKey.value(), targetKey.value())
+            );
+            repairs.push_back(std::move(rung));
+        }
+    }
+    return {std::move(repairs), prune};
+}
+
+std::vector<group::server::SpaceRung> GroupApiImpl::spaceRungsFor(
+    const group::server::SpaceInfo& space,
+    std::int64_t next,
+    const std::string& nextKey
+) {
+    // The canonical set (LadderMath::buildRungSet, as a group's epochs), each a symmetric seal of an earlier key.
+    return keytree::LadderMath::buildRungSet(
+        static_cast<std::uint32_t>(next), 1, true, [&](const keytree::RungSpan& span) {
+            group::server::SpaceRung rung;
+            rung.atKeyVersion = span.at;
+            rung.targetKeyVersion = span.target;
+            rung.data = privmx::utils::Base64::from(
+                keytree::SpaceLog::sealRung(space.id, span.at, span.target, nextKey, spaceKeyAt(space, span.target).key)
+            );
+            return rung;
+        }
+    );
 }
 
 // -- wrapping the key --------------------------------------------------------------------------------------
@@ -801,7 +1089,7 @@ std::vector<group::server::SpaceKeyEntry> GroupApiImpl::wrapSpaceKeyFor(
 
 // -- the Space itself ------------------------------------------------------------------------------------
 
-// The new recipients of a statement: who the caller named, each group at the epoch and key its wrap was made for.
+// The recipients a statement adds: who the caller named, each group at the epoch and key its wrap was made for.
 void GroupApiImpl::appendRecipients(
     keytree::SpaceStatement& statement,
     const std::vector<SpaceRecipient>& recipients,
@@ -809,7 +1097,7 @@ void GroupApiImpl::appendRecipients(
 ) {
     for (const SpaceRecipient& recipient : recipients) {
         if (recipient.user.has_value()) {
-            statement.users.push_back(
+            statement.addedUsers.push_back(
                 keytree::SpaceLogUser{
                     .userId = recipient.user->userId, .pubKey = recipient.user->pubKey, .role = recipient.role
                 }
@@ -819,7 +1107,7 @@ void GroupApiImpl::appendRecipients(
         const auto target = std::find_if(targets.begin(), targets.end(), [&](const SpaceTarget& t) {
             return t.isGroup && t.id == recipient.groupId;
         });
-        statement.groups.push_back(
+        statement.addedGroups.push_back(
             keytree::SpaceLogGroup{
                 .groupId = recipient.groupId,
                 .role = recipient.role,
@@ -876,6 +1164,7 @@ std::string GroupApiImpl::createSpace(
     statement.keyVersion = 1;
     statement.keyCommit = keytree::SpaceLog::keyCommit(spaceId, 1, spaceKey);
     appendRecipients(statement, recipients, targets);
+    statement.rosterHash = keytree::SpaceLog::rosterHash(statement.addedGroups, statement.addedUsers);
     statement = signSpaceStatement(std::move(statement), std::nullopt);
     const keytree::SpaceLogState created = keytree::SpaceLog::apply(std::nullopt, statement);
     model.statement = keytree::SpaceLog::toWire(statement);
@@ -889,15 +1178,9 @@ std::string GroupApiImpl::createSpace(
             .authorUserId = _connection.getImpl()->getMyUserId(contextId),
         }
     ));
+    // A new id: the Bridge never hands out a deleted Space's id again, so nothing of an earlier Space is held under it.
     core::EndpointUtils::assertServedId(spaceId, _serverApi.spaceCreate(model).spaceId);
-    dropSpace(spaceId); // whatever is cached of an earlier Space under this id
-    {
-        // This process made it: the only way the verified history of an earlier Space under this id is let go.
-        std::lock_guard lock(_spaceLogsMutex);
-        _spaceLogs.erase(spaceId);
-        _spacePins.erase(spaceId);
-    }
-    rememberSpaceLog(created, true);
+    rememberSpaceLog(created);
     return spaceId;
 }
 
@@ -930,14 +1213,8 @@ SpaceState GroupApiImpl::toSpaceState(const group::server::SpaceInfo& space) {
     if (routing.spaceId != space.id) {
         throw EnvelopeWrongGroupException("private metadata of another Space");
     }
-    group::server::SpaceInfo withKeys = space;
-    if (std::none_of(space.keys.begin(), space.keys.end(), [&](const group::server::SpaceKeyEntry& entry) {
-            return entry.keyVersion == routing.keyVersion;
-        })) {
-        withKeys = spaceInfo(space.id, true); // a listing carries the current version only
-    }
     const OpenedEnvelope opened = _envelopeEncryptor.openSpaceEnvelope(
-        sealed, spaceKeyAt(withKeys, routing.keyVersion).key, metaBinding(space.privateMetaVersion)
+        sealed, spaceKeyAt(space, routing.keyVersion).key, metaBinding(space.privateMetaVersion)
     );
     requireVerifiedWriter(
         space.contextId, opened, DecryptOptions{.expectedAuthor = {}, .anyAuthor = true, .currentEpochOnly = false}
@@ -992,8 +1269,41 @@ void GroupApiImpl::deleteSpace(const std::string& spaceId) {
 }
 
 void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients) {
+    if (recipients.empty()) {
+        throw core::InvalidParamsException("field:recipients cannot be empty");
+    }
     keytree::SpaceLogState verified;
     const group::server::SpaceInfo space = spaceInfo(spaceId, true, &verified);
+    // Checked against the verified history before anything is signed: a mistake is the caller's, never the Bridge's.
+    // Every one already there as asked (a retry after a lost answer) is the addition done; some is a mistake.
+    std::set<std::string> named;
+    std::size_t present = 0;
+    for (const SpaceRecipient& recipient : recipients) {
+        const bool isUser = recipient.user.has_value();
+        const std::string id = isUser ? recipient.user->userId : recipient.groupId;
+        if (!named.insert((isUser ? "u:" : "g:") + id).second) {
+            throw core::InvalidParamsException("recipient " + id + " is named twice");
+        }
+        const keytree::SpaceLogGroup* group = isUser ? nullptr : verified.group(id);
+        const std::string role = isUser ? verified.roleOfUser(id) : (group != nullptr ? group->role : std::string());
+        if (role.empty()) {
+            continue;
+        }
+        const bool asAsked = role == recipient.role &&
+            (!isUser || std::any_of(verified.users.begin(), verified.users.end(), [&](const keytree::SpaceLogUser& u) {
+                                 return u.userId == id && u.pubKey == recipient.user->pubKey;
+                             }));
+        if (!asAsked) {
+            throw core::InvalidParamsException("recipient " + id + " is already in the Space, in another role or key");
+        }
+        ++present;
+    }
+    if (present == recipients.size()) {
+        return; // already done
+    }
+    if (present != 0) {
+        throw core::InvalidParamsException("some of the recipients are already in the Space");
+    }
     std::vector<std::string> groupIds;
     std::vector<core::UserWithPubKey> users;
     group::server::SpaceAddRecipientsModel model;
@@ -1016,15 +1326,13 @@ void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vec
         }
         model.recipients.push_back(std::move(wire));
     }
-    // Every version, so that they read what is already there. Each is wrapped to the recipient's current key.
+    // The current version only: an earlier one is read down the key ladder from it, so they read what is already
+    // there without a wrap per version.
     const std::vector<SpaceTarget> targets = spaceTargets(space.contextId, groupIds, users);
-    for (std::int64_t version = 1; version <= space.keyVersion; ++version) {
-        const auto entries = wrapSpaceKeyFor(
-            spaceId, space.contextId, version, spaceKeyAt(space, version).key, targets
-        );
-        model.keys.insert(model.keys.end(), entries.begin(), entries.end());
-    }
-    // The state of the same read the versions above came from: a later one could commit to a newer key.
+    model.keys = wrapSpaceKeyFor(
+        spaceId, space.contextId, space.keyVersion, spaceKeyAt(space, space.keyVersion).key, targets
+    );
+    // The state of the same read the key above came from: a later one could commit to a newer key.
     const std::optional<keytree::SpaceLogState> prior = verified;
     keytree::SpaceStatement statement;
     statement.spaceId = spaceId;
@@ -1032,9 +1340,12 @@ void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vec
     statement.op = keytree::SpaceOp::Add;
     statement.keyVersion = prior.value().keyVersion;
     statement.keyCommit = prior->keyCommits.at(prior->keyVersion);
-    statement.groups = prior->groups;
-    statement.users = prior->users;
     appendRecipients(statement, recipients, targets);
+    std::vector<keytree::SpaceLogGroup> rosterGroups = prior->groups;
+    std::vector<keytree::SpaceLogUser> rosterUsers = prior->users;
+    rosterGroups.insert(rosterGroups.end(), statement.addedGroups.begin(), statement.addedGroups.end());
+    rosterUsers.insert(rosterUsers.end(), statement.addedUsers.begin(), statement.addedUsers.end());
+    statement.rosterHash = keytree::SpaceLog::rosterHash(rosterGroups, rosterUsers);
     statement = signSpaceStatement(std::move(statement), prior);
     const keytree::SpaceLogState added = keytree::SpaceLog::apply(prior, statement);
     model.statement = keytree::SpaceLog::toWire(statement);
@@ -1054,6 +1365,35 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     const auto dropped = [](const std::vector<std::string>& list, const std::string& id) {
         return std::find(list.begin(), list.end(), id) != list.end();
     };
+    if (!withoutGroups.empty() || !withoutUsers.empty()) {
+        // A removal, checked against the verified history before anything is signed: none of them still there (a
+        // retry after a lost answer) is the removal done; some is the caller's mistake, and so is no manager left.
+        std::size_t absent = 0;
+        for (const std::string& id : withoutGroups) {
+            absent += verified.group(id) == nullptr ? 1 : 0;
+        }
+        for (const std::string& id : withoutUsers) {
+            absent += verified.roleOfUser(id).empty() ? 1 : 0;
+        }
+        if (absent == withoutGroups.size() + withoutUsers.size()) {
+            return static_cast<std::int64_t>(verified.keyVersion); // already done
+        }
+        if (absent != 0) {
+            throw core::InvalidParamsException("some of the recipients to remove are not in the Space");
+        }
+        const bool managerLeft = std::any_of(
+                                     verified.groups.begin(), verified.groups.end(),
+                                     [&](const keytree::SpaceLogGroup& g) {
+                                         return g.role == "manager" && !dropped(withoutGroups, g.groupId);
+                                     }
+                                 ) ||
+            std::any_of(verified.users.begin(), verified.users.end(), [&](const keytree::SpaceLogUser& u) {
+                                     return u.role == "manager" && !dropped(withoutUsers, u.userId);
+                                 });
+        if (!managerLeft) {
+            throw core::InvalidParamsException("a Space keeps at least one manager");
+        }
+    }
     std::vector<std::string> groupIds;
     for (const group::server::SpaceGroup& group : space.groups) {
         if (!dropped(withoutGroups, group.groupId)) {
@@ -1073,6 +1413,8 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     model.id = spaceId;
     model.keyId = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(16));
     model.keys = wrapSpaceKeyFor(spaceId, space.contextId, next, spaceKey, targets);
+    // The new version's rungs: what every earlier version is read through from now on.
+    model.rungs = spaceRungsFor(space, next, spaceKey);
     model.expectedKeyVersion = space.keyVersion;
     // Who stays, as the statements of the same read have them; each group at the epoch and key it was just wrapped
     // for.
@@ -1083,12 +1425,13 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     statement.op = withoutGroups.empty() && withoutUsers.empty() ? keytree::SpaceOp::Rotate : keytree::SpaceOp::Remove;
     statement.keyVersion = static_cast<std::uint64_t>(next);
     statement.keyCommit = keytree::SpaceLog::keyCommit(spaceId, static_cast<std::uint64_t>(next), spaceKey);
+    std::vector<keytree::SpaceLogGroup> staying;
     for (const keytree::SpaceLogGroup& group : prior.value().groups) {
         const auto target = std::find_if(targets.begin(), targets.end(), [&](const SpaceTarget& t) {
             return t.isGroup && t.id == group.groupId;
         });
         if (target != targets.end()) {
-            statement.groups.push_back(
+            staying.push_back(
                 keytree::SpaceLogGroup{
                     .groupId = group.groupId,
                     .role = group.role,
@@ -1098,23 +1441,39 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
             );
         }
     }
+    std::vector<keytree::SpaceLogUser> stayingUsers;
     for (const keytree::SpaceLogUser& user : prior->users) {
         if (!dropped(withoutUsers, user.userId)) {
-            statement.users.push_back(user);
+            stayingUsers.push_back(user);
         }
     }
+    // As deltas on the verified state: the removed, and each staying group whose epoch moved since.
+    keytree::SpaceLog::setRoster(statement, prior, staying, stayingUsers);
     try {
         statement = signSpaceStatement(std::move(statement), prior);
     } catch (const GroupUnauthorizedSignerException& e) {
         if (!forStaleWrite) {
             throw;
         }
-        // Not this caller's to replace: a group's key is refreshed by a manager of the Space or by that group.
+        // Not this caller's to sign (no standing in the verified state).
         // Nothing is written under a key a removed member holds; whoever may, replaces it first.
         throw EnvelopeStaleEpochException("the Space's key is stale and the caller may not replace it", e);
     }
     const keytree::SpaceLogState replaced = keytree::SpaceLog::apply(prior, statement);
     model.statement = keytree::SpaceLog::toWire(statement);
+    // A manager's rotation checks the ladder since the last prune, repairs what does not hold, and prunes the
+    // earlier wraps only when all of it does: a recipient's garbage rungs never cost anyone the history.
+    const keytree::SpaceLogGroup* viaGroup = statement.via.empty() ? nullptr : prior->group(statement.via);
+    if (statement.via.empty() ? prior->roleOfUser(statement.signer) == "manager" :
+                                (viaGroup != nullptr && viaGroup->role == "manager")) {
+        auto [repairs, prune] = spaceLadderRepairs(space, MAX_SPACE_RUNGS_PER_REQUEST - model.rungs.size());
+        if (!repairs.empty()) {
+            model.repairRungs = std::move(repairs);
+        }
+        if (prune) {
+            model.prune = true;
+        }
+    }
     if (!withoutGroups.empty() || !withoutUsers.empty()) {
         model.groups = withoutGroups;
         model.users = withoutUsers;

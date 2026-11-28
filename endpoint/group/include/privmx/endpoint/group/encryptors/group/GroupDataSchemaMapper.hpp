@@ -74,8 +74,8 @@ public:
 
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
-    // A plane's author and whoever wrapped its key must be on the attested roster, and the author must hold `update`
-    // under the group's signed rules. With `prior` (a carry-forward only), an entry identical to the one the
+    // A plane's author and whoever wrapped its key must be on the attested roster, and the author must hold the
+    // plane's rule (`editPublicMeta` / `editPrivateMeta`) under the group's signed rules. With `prior` (a carry-forward only), an entry identical to the one the
     // committer read before its own commit is judged by that read's rules and roster instead; any other by the
     // current ones.
     void assertPublicMetaIsAttested(
@@ -113,6 +113,11 @@ public:
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers
     );
+
+    // The plane's rule (`editPublicMeta` or `editPrivateMeta`).
+    static const std::string& editRule(const keytree::GroupRules& rules, bool publicPlane) {
+        return publicPlane ? rules.editPublicMeta : rules.editPrivateMeta;
+    }
 
     // The served group's rules: signed only on a verified read, which bound them to its latest statement
     // (`describes`). A plan parses them off the read before it refuses an unseated one, as it always has.
@@ -183,6 +188,10 @@ public:
     // to decrypt, verify or checkpoint here.
     static GroupSummary toLibGroupSummary(const server::GroupSummary& info);
 
+    // The public view of a served rules object; empty strings when it does not parse (the caller's status code, or
+    // for a listing its being unverified, says what it is worth).
+    static GroupRules toLibRules(const Poco::Dynamic::Var& policy, const std::string& creator);
+
     // Overrides base to parse the group's roster envelope instead of EncryptedModuleDataV5.
     core::ModuleInternalMetaV5 decryptInternalMeta(
         const Poco::Dynamic::Var& data,
@@ -191,11 +200,12 @@ public:
 
 private:
     // A plane's key opened, the plane and its key written by somebody on the roster, and the plane's author holding
-    // `update` under the signed rules. Anybody in the context can wrap a key to the group's public grant key and
-    // tag a plane under it; the roster says who belongs to the group and its signed policy who writes its metadata. The
-    // key's wrapper needs no role: a rotator with `rotateKeys` alone legitimately authors the epoch's key entry. With
-    // `prior` (carry-forward only), an entry identical to `readBefore` is judged by that read.
+    // the plane's rule (`editPublicMeta` / `editPrivateMeta`) under the signed rules. Anybody in the context can wrap
+    // a key to the group's public grant key and tag a plane under it; the roster says who belongs to the group and its
+    // signed rules who writes its metadata. The key's wrapper needs no role: any member may rotate, and so author the
+    // epoch's key entry. With `prior` (carry-forward only), an entry identical to `readBefore` is judged by that read.
     static void assertWrittenByMember(
+        bool publicPlane,
         const server::GroupInfo& groupInfo,
         const server::GroupMetaEntry& entry,
         const server::GroupMetaEntry* readBefore,

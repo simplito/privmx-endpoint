@@ -33,7 +33,6 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {BuildCustomEventSubscriptionQuery, &GroupApiVarInterface::buildCustomEventSubscriptionQuery},
         {UpdateGroupPublicMeta, &GroupApiVarInterface::updateGroupPublicMeta},
         {UpdateGroupPrivateMeta, &GroupApiVarInterface::updateGroupPrivateMeta},
-        {UpdateGroupPolicy, &GroupApiVarInterface::updateGroupPolicy},
         {RotateGroupKey, &GroupApiVarInterface::rotateGroupKey},
         {RenewLeaf, &GroupApiVarInterface::renewLeaf},
         {DecryptMany, &GroupApiVarInterface::decryptMany},
@@ -104,15 +103,13 @@ Poco::Dynamic::Var GroupApiVarInterface::createGroup(const Poco::Dynamic::Var& a
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
+    auto rules = _deserializer.deserializeOptional<GroupRulesUpdate>(argsArr->get(5), "rules");
     auto idSeed = argsArr->size() > 6 ? _deserializer.deserializeOptional<core::Buffer>(argsArr->get(6), "idSeed") :
                                         std::optional<core::Buffer>();
     auto visibleTo = argsArr->size() > 7 ?
         _deserializer.deserializeOptional<std::string>(argsArr->get(7), "visibleTo").value_or("members") :
         std::string("members");
-    auto result = _groupApi.createGroup(
-        contextId, users, managers, publicMeta, privateMeta, policies, idSeed, visibleTo
-    );
+    auto result = _groupApi.createGroup(contextId, users, managers, publicMeta, privateMeta, rules, idSeed, visibleTo);
     return _serializer.serialize(result);
 }
 
@@ -163,16 +160,6 @@ Poco::Dynamic::Var GroupApiVarInterface::updateGroupPrivateMeta(const Poco::Dyna
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "privateMeta");
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(2), "version");
     _groupApi.updateGroupPrivateMeta(groupId, privateMeta, version);
-    return {};
-}
-
-Poco::Dynamic::Var GroupApiVarInterface::updateGroupPolicy(const Poco::Dynamic::Var& args) {
-    // Required, not optional: on a call that does nothing else, an absent policy is a request that asks for
-    // nothing — where on the old combined call it meant "leave the policy alone".
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
-    auto policies = _deserializer.deserialize<core::ContainerPolicy>(argsArr->get(1), "policies");
-    _groupApi.updateGroupPolicy(groupId, policies);
     return {};
 }
 

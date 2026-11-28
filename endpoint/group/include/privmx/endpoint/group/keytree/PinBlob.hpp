@@ -35,7 +35,7 @@ namespace keytree {
 //   body   = u32 count || record*count                                   (sorted by groupId, no duplicates)
 //   record = lp(groupId) || lp(contextId) || u64 seq || lp(digest) || u64 date
 //          || u64 keyVersion || lp(groupPubKey) || u64 rosterVersion || lp(rosterHash)
-//          || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy) || lp(ownerCanBeRemovedFromManagers)
+//          || lp(creator) || lp(rule)*8 (TreeCommits::ruleFields order)
 //          || lp(rulesHash) || lp(treeHash) || u64 refusedSeq || u64 seenAt
 //          || u64 planeRosterVersion || u64 planePublicMetaVersion || u64 planePrivateMetaVersion
 //          || u8 flags        bit0 roster present, bit1 nodes present (requires bit0), others 0
@@ -72,10 +72,7 @@ private:
     // The bits of a record's `flags` byte.
     static constexpr std::uint8_t ROSTER = 1;
     static constexpr std::uint8_t NODES = 2;
-    // The group's policy sets a roster rule of its own: `addMembers` and `removeMembers` follow the flags. A record
-    // without it is the layout from before those rules existed, and reads as "both follow `update`": pins saved by
-    // an earlier build stay readable, and nothing a device verified is lost to the format.
-    static constexpr std::uint8_t RULES = 8; // 4 was `forked` in an earlier layout: not reused
+    // 4 (`forked`) and 8 (roster rules) were flags of earlier layouts: not reused.
 
     // A counter below zero (no pin yet) written as 0.
     static std::uint64_t counter(std::int64_t value);

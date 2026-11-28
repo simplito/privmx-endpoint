@@ -76,8 +76,9 @@ bool GroupMetadata::carryMetadataForward(
     const std::string& groupId,
     CarryScope scope,
     bool historyAbandoned,
-    const std::vector<std::string>& losers,
-    const PriorRole& prior
+    const PriorRole& prior,
+    bool narrowedPublic,
+    bool narrowedPrivate
 ) const {
     try {
         // One verified answer decides both whether a plane is carried and what it says: re-signing metadata this
@@ -104,11 +105,8 @@ bool GroupMetadata::carryMetadataForward(
                 return true;
             }
         } else {
-            const auto lost = [&](const std::string& author) {
-                return std::find(losers.begin(), losers.end(), author) != losers.end();
-            };
-            carryPublic = lost(group.publicMeta.author);
-            carryPrivate = lost(group.privateMeta.author);
+            carryPublic = narrowedPublic;
+            carryPrivate = narrowedPrivate;
         }
         // On every carried plane: only the very entry read before the commit. One tagged since (by a member
         // removed meanwhile, or by a loser of a narrowing, which still holds the current key) is never re-signed.
@@ -117,7 +115,7 @@ bool GroupMetadata::carryMetadataForward(
         if (!carryPublic && !carryPrivate) {
             return true; // already current, or written over since: nothing of the read is left to carry
         }
-        // The entries as read are judged by the read's rules and roster: a plane whose author lacked `update`
+        // The entries as read are judged by the read's rules and roster: a plane whose author lacked its rule
         // then is refused here too, so neither a removal nor a narrowing launders it.
         const Group opened = mapper.validateDecryptAndConvertGroup(
             group, keyProvider, keys.resolverOver(&verified), prior
@@ -126,14 +124,32 @@ bool GroupMetadata::carryMetadataForward(
             return false;
         }
         // One write per carried plane, both off the one verified read: a metadata write moves neither the head nor
-        // the epoch it is checked against.
-        if (carryPublic) {
-            writeMeta(verified, true, opened.publicMeta, opened.publicMetaVersion);
+        // the epoch it is checked against. A plane the caller holds no rule for is not written (the Bridge and every
+        // reader would refuse it): one whose author left stays unreadable until a holder of the rule rewrites it.
+        const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(group);
+        const std::optional<std::string> self = keytree::GroupKeyResolver::ownUserId(group);
+        const bool manager = self.has_value() &&
+            std::find(group.managers.begin(), group.managers.end(), self.value()) != group.managers.end();
+        bool done = true;
+        for (const bool publicPlane : {true, false}) {
+            if (!(publicPlane ? carryPublic : carryPrivate)) {
+                continue;
+            }
+            if (!keytree::TreeCommits::allows(GroupDataSchemaMapper::editRule(rules, publicPlane), true, manager)) {
+                LOG_WARN(
+                    "[carryMetadataForward] group ", groupId, ": the ", publicPlane ? "public" : "private",
+                    " metadata is not carried forward: this member may not write it; until a member who may rewrites "
+                    "it, readers may refuse it"
+                )
+                done = false;
+                continue;
+            }
+            writeMeta(
+                verified, publicPlane, publicPlane ? opened.publicMeta : opened.privateMeta,
+                publicPlane ? opened.publicMetaVersion : opened.privateMetaVersion
+            );
         }
-        if (carryPrivate) {
-            writeMeta(verified, false, opened.privateMeta, opened.privateMetaVersion);
-        }
-        return true;
+        return done;
     } catch (const std::exception& e) {
         // Best-effort by design. A failure leaves the planes where the commit left them, and the next metadata write
         // closes the window; throwing here would fail a commit that has already happened.
@@ -146,7 +162,9 @@ bool GroupMetadata::carryMetadataForward(
 }
 
 void GroupMetadata::runPolicyCarry(const std::string& groupId, const PendingCarry& carry) const {
-    const bool done = carryMetadataForward(groupId, CarryScope::Policy, false, carry.losers, carry.prior);
+    const bool done = carryMetadataForward(
+        groupId, CarryScope::Policy, false, carry.prior, carry.publicPlane, carry.privatePlane
+    );
     const auto session = deps.sessions.of(groupId);
     std::lock_guard<std::mutex> lock(session->mutex);
     if (done) {

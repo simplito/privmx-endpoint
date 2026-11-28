@@ -59,22 +59,9 @@ struct GroupApiImplTestAccess {
         const GroupKeyRefresh& refresh,
         std::optional<std::int64_t> memberEpoch,
         const std::optional<core::GroupEpochInfo>& current,
-        const std::optional<std::string>& chainKey = std::nullopt,
-        bool groupHidden = false
+        const std::optional<std::string>& chainKey = std::nullopt
     ) {
-        return GroupApiImpl::refusedRefresh(refresh, memberEpoch, current, chainKey, groupHidden);
-    }
-    static void rememberSpaceLog(GroupApiImpl& api, const keytree::SpaceLogState& state, bool created = false) {
-        api.rememberSpaceLog(state, created);
-    }
-    // What a first Space read of the session does: the device's stored pins, loaded once.
-    static void loadSpacePins(GroupApiImpl& api) {
-        std::lock_guard lock(api._spaceLogsMutex);
-        api._spacePins = api.storedSpacePins();
-        api._spacePinsLoaded = true;
-    }
-    static std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins(GroupApiImpl& api) {
-        return api.storedSpacePins();
+        return GroupApiImpl::refusedRefresh(refresh, memberEpoch, current, chainKey);
     }
     // As if the last pin save (or failed attempt) were PIN_SAVE_IDLE_INTERVAL ago: no clock to move in a unit test.
     static void agePinSave(GroupApiImpl& api) {
@@ -110,5 +97,9 @@ struct GroupApiImplTestAccess {
     }
     // The group key resolver the key provider is handed (containers, envelopes, the group's own metadata).
     static core::KeyProvider::GroupPrivKeyResolver groupKeyResolver(GroupApiImpl& api) { return api._groupPrivKeyResolver; }
+    // A Space's key at `keyVersion`, as a read of it gets it (the current one unwrapped, an earlier one descended to).
+    static std::string spaceKey(GroupApiImpl& api, const std::string& spaceId, std::int64_t keyVersion) {
+        return api.spaceKeyAt(api.spaceInfo(spaceId, true), keyVersion).key;
+    }
 };
 } // namespace privmx::endpoint::group

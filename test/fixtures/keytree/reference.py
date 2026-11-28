@@ -6,10 +6,9 @@ Both the Endpoint (C++) and the Bridge (TypeScript) read the vectors this writes
 source of the other's expectations. Change a layout here first, from the spec, then make both sides agree.
 
     H = sha256; u8/u32/u64 big-endian; lp(s) = u32(len) || s; a domain tag ends in NUL
-    PH = H("pmx-group-policy\\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
-           || lp(ownerCanBeRemovedFromManagers) [|| lp(addMembers) || lp(removeMembers)])
-           each field resolved against the frozen v3 defaults; the bracketed pair only when the policy sets one of
-           the two, an unset one of them being `update`'s resolved value
+    PH = H("pmx-group-rules-v1\\0" || lp(creator) || lp(addMembers) || lp(removeMembers) || lp(replaceMemberKeys)
+           || lp(changeRoles) || lp(changeRules) || lp(changeVisibility) || lp(editPublicMeta)
+           || lp(editPrivateMeta))     the rules object holds exactly these eight, each "managers", "members" or "nobody"
     SB = "pmx-tree-commit\\0" || lp(groupId) || u32(treeVersion) || u64(seq) || lp(prevDigest) || u8(op) || u64(date)
          || u64(keyVersion) || lp(groupPubKey) || u64(rosterVersion) || RH || TH || PH || lp(committer)
          || lp(committerPubKey) || u32(committerSeat) || u32(#path) || (u32(v) || u32(gen) || lp(pk) || CH)*
@@ -30,9 +29,9 @@ import sys
 # Every domain tag of the key tree, in one place. Later branches append theirs.
 TAGS = [
     b"pmx-tree-commit\0",
-    b"pmx-group-policy\0",
+    b"pmx-group-rules-v1\0",
     b"pmx-space-id\0",
-    b"pmx-space-recipients\0",
+    b"pmx-space-roster-v1\0",
     b"pmx-space-key\0",
     b"pmx-space-statement\0",
     b"pmx-space-via\0",
@@ -40,16 +39,12 @@ TAGS = [
 
 OP_CODES = {"create": 1, "add": 2, "remove": 3, "selfUpdate": 4, "rotate": 5, "policy": 6, "roles": 7, "reseat": 8}
 
-# Frozen with the v3 format: NOT the bridge's context defaults.
-V3_POLICY_DEFAULTS = {
-    "update": "manager",
-    "rotateKeys": "manager",
-    "updatePolicy": "manager",
-    "ownerCanBeRemovedFromManagers": "yes",
-}
-SIGNED_POLICY_FIELDS = ["update", "rotateKeys", "updatePolicy", "ownerCanBeRemovedFromManagers"]
-# The roster's two rules: unset, each is `update`'s value, and neither is hashed unless one is set.
-MEMBER_RULES = ["addMembers", "removeMembers"]
+WHO = ("managers", "members", "nobody")
+RULE_FIELDS = [
+    "addMembers", "removeMembers", "replaceMemberKeys", "changeRoles", "changeRules", "changeVisibility",
+    "editPublicMeta", "editPrivateMeta",
+]
+ALL_MANAGERS = {field: "managers" for field in RULE_FIELDS}
 
 
 def u8(v):
@@ -76,19 +71,12 @@ def tag(name):
     return t
 
 
-def resolve(policy, field):
-    value = policy.get(field)
-    return V3_POLICY_DEFAULTS[field] if value in (None, "inherit", "default") else value
-
-
-def policy_hash(policy, creator):
-    pre = tag("pmx-group-policy") + lp(creator)
-    for field in SIGNED_POLICY_FIELDS:
-        pre += lp(resolve(policy, field))
-    unset = lambda field: policy.get(field) in (None, "inherit", "default")
-    if not all(unset(field) for field in MEMBER_RULES):
-        for field in MEMBER_RULES:
-            pre += lp(resolve(policy, "update") if unset(field) else policy[field])
+def rules_hash(rules, creator):
+    assert set(rules) == set(RULE_FIELDS), rules
+    pre = tag("pmx-group-rules-v1") + lp(creator)
+    for field in RULE_FIELDS:
+        assert rules[field] in WHO, (field, rules[field])
+        pre += lp(rules[field])
     return hashlib.sha256(pre).hexdigest()
 
 
@@ -109,22 +97,35 @@ def signed_bytes(s):
     return b
 
 
-EXPLICIT = {"update": "user", "rotateKeys": "manager,owner", "updatePolicy": "owner", "ownerCanBeRemovedFromManagers": "no"}
+EXPLICIT = dict(
+    ALL_MANAGERS, addMembers="members", removeMembers="nobody", replaceMemberKeys="members",
+    changeVisibility="nobody", editPublicMeta="members",
+)
+IMMUTABLE = dict(ALL_MANAGERS, addMembers="nobody", removeMembers="nobody", changeRoles="nobody", changeRules="nobody")
 
-POLICIES = [
-    ({}, "alice"),
-    ({f: "inherit" for f in SIGNED_POLICY_FIELDS}, "alice"),
-    ({f: "default" for f in SIGNED_POLICY_FIELDS}, "alice"),
+# Shared with the Bridge's conformance tests.
+RULES = [
+    (dict(ALL_MANAGERS), "alice"),
+    (dict(ALL_MANAGERS), "bob"),
     (dict(EXPLICIT), "alice"),
-    # Fields the statements do not sign: same hash as the explicit set above.
-    (dict(EXPLICIT, get="all", delete="none", sendCustomNotification="user", item={"get": "user"}), "alice"),
-    (dict(EXPLICIT), "bob"),
-    # The roster's rules: unset ones change nothing, one set hashes both, and the two are not interchangeable.
-    (dict(EXPLICIT, addMembers="inherit", removeMembers="default"), "alice"),
-    ({"addMembers": "user"}, "alice"),
-    ({"addMembers": "user", "removeMembers": "manager,owner"}, "alice"),
-    ({"addMembers": "manager,owner", "removeMembers": "user"}, "alice"),
-    (dict(EXPLICIT, removeMembers="none"), "alice"),
+    ({field: "members" for field in RULE_FIELDS}, "alice"),
+    (dict(ALL_MANAGERS, changeRoles="nobody", changeRules="nobody", changeVisibility="members", editPrivateMeta="members"),
+     "alice"),
+    (dict(IMMUTABLE), "alice"),
+]
+
+# Rules objects both sides refuse: a field missing, one unknown, a value outside the field's set, the old grammar.
+INVALID_RULES = [
+    {k: v for k, v in ALL_MANAGERS.items() if k != "changeVisibility"},
+    dict(ALL_MANAGERS, history="shared"),
+    dict(ALL_MANAGERS, trimHistory="nobody"),
+    dict(ALL_MANAGERS, manage="managers"),
+    dict(ALL_MANAGERS, addMembers="manager"),
+    dict(ALL_MANAGERS, removeMembers="manager,owner"),
+    dict(ALL_MANAGERS, editPublicMeta="all"),
+    dict(ALL_MANAGERS, editPrivateMeta=""),
+    dict(ALL_MANAGERS, addMembers=1),
+    {},
 ]
 
 # rosterHash({carol, alice}, {bob}) and the tiny tree of TreeCommitsTest.cpp (themselves vectors there).
@@ -133,14 +134,14 @@ REMOVAL = {
     "date": 1760000000000, "keyVersion": 4, "groupPubKey": "GPK", "rosterVersion": 9,
     "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
     "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
-    "policyHash": policy_hash({}, "alice"),
+    "policyHash": rules_hash(ALL_MANAGERS, "alice"),
     "committer": "alice", "committerPubKey": "APK", "committerSeat": 0,
     "path": [{"nodeIndex": 3, "generation": 2, "publicKey": "pk3", "subtreeHash": "11" * 32}],
     "addedUsers": [], "addedManagers": [], "removed": ["bob"],
 }
 
 POLICY_CHANGE = dict(
-    REMOVAL, seq=8, prevDigest="33" * 32, op="policy", date=1760000000001, policyHash=policy_hash(EXPLICIT, "alice"),
+    REMOVAL, seq=8, prevDigest="33" * 32, op="policy", date=1760000000001, policyHash=rules_hash(EXPLICIT, "alice"),
     path=[], removed=[], policy=dict(EXPLICIT),
 )
 
@@ -154,18 +155,41 @@ ROLES = dict(
 RESEAT = dict(REMOVAL, seq=10, prevDigest="55" * 32, op="reseat", date=1760000000003, keyVersion=5, rosterVersion=11)
 
 
-# -- a Space's statements (proposals/space-log-format.md) ------------------------------------------------
+# -- a Space's statements (proposals/space-log-format.md), version 2: deltas + rosterHash ---------------------
+#
+#   RH = H("pmx-space-roster-v1\0" || u32(#groups) || (lp(groupId) || lp(role) || u64(groupKeyVersion) || lp(groupPubKey))*
+#          || u32(#users) || (lp(userId) || lp(pubKey) || lp(role))*)        the full roster after the statement
+#   SB = "pmx-space-statement\0" || u8(2) || lp(spaceId) || lp(contextId) || u64(seq) || lp(prevDigest) || u8(op)
+#        || u64(date) || u64(keyVersion) || keyCommit(32) || RH(32)
+#        || u32(#addedGroups) || (lp(groupId) || lp(role) || u64(groupKeyVersion) || lp(groupPubKey))*
+#        || u32(#addedUsers) || (lp(userId) || lp(pubKey) || lp(role))*
+#        || u32(#removedGroups) || lp(groupId)* || u32(#removedUsers) || lp(userId)*
+#        || u32(#refreshedGroups) || (lp(groupId) || u64(groupKeyVersion) || lp(groupPubKey))*
+#        || lp(signer) || lp(signerPubKey) || lp(via)
+#   every list sorted by id (UTF-8 bytes), whatever order it came in
 
 SPACE_OPS = {"create": 1, "add": 2, "remove": 3, "rotate": 4}
 
 
-def space_recipients_hash(groups, users):
-    b = tag("pmx-space-recipients") + u32(len(groups))
-    for g in sorted(groups, key=lambda g: g["groupId"].encode("utf-8")):
-        b += lp(g["groupId"]) + lp(g["role"]) + u64(g["groupKeyVersion"]) + lp(g["groupPubKey"])
+def by_id(entries, key):
+    return sorted(entries, key=lambda e: (e[key] if isinstance(e, dict) else e).encode("utf-8"))
+
+
+def space_group(g):
+    return lp(g["groupId"]) + lp(g["role"]) + u64(g["groupKeyVersion"]) + lp(g["groupPubKey"])
+
+
+def space_user(u):
+    return lp(u["userId"]) + lp(u["pubKey"]) + lp(u["role"])
+
+
+def space_roster_hash(groups, users):
+    b = tag("pmx-space-roster-v1") + u32(len(groups))
+    for g in by_id(groups, "groupId"):
+        b += space_group(g)
     b += u32(len(users))
-    for u in sorted(users, key=lambda u: u["userId"].encode("utf-8")):
-        b += lp(u["userId"]) + lp(u["pubKey"]) + lp(u["role"])
+    for u in by_id(users, "userId"):
+        b += space_user(u)
     return hashlib.sha256(b).digest()
 
 
@@ -177,16 +201,32 @@ def space_signed_bytes(s):
     prev = bytes.fromhex(s["prevDigest"])
     assert len(prev) == (0 if s["seq"] == 1 else 32)
     key_commit = bytes.fromhex(s["keyCommit"])
-    assert len(key_commit) == 32
-    return (
-        tag("pmx-space-statement") + u8(1) + lp(s["spaceId"]) + lp(s["contextId"]) + u64(s["seq"]) + lp(prev)
-        + u8(SPACE_OPS[s["op"]]) + u64(s["date"]) + u64(s["keyVersion"]) + key_commit
-        + space_recipients_hash(s["groups"], s["users"]) + lp(s["signer"]) + lp(s["signerPubKey"]) + lp(s["via"])
+    roster_hash = bytes.fromhex(s["rosterHash"])
+    assert len(key_commit) == 32 and len(roster_hash) == 32
+    b = tag("pmx-space-statement") + u8(2) + lp(s["spaceId"]) + lp(s["contextId"]) + u64(s["seq"]) + lp(prev)
+    b += u8(SPACE_OPS[s["op"]]) + u64(s["date"]) + u64(s["keyVersion"]) + key_commit + roster_hash
+    b += u32(len(s["addedGroups"])) + b"".join(space_group(g) for g in by_id(s["addedGroups"], "groupId"))
+    b += u32(len(s["addedUsers"])) + b"".join(space_user(u) for u in by_id(s["addedUsers"], "userId"))
+    b += u32(len(s["removedGroups"])) + b"".join(lp(x) for x in by_id(s["removedGroups"], None))
+    b += u32(len(s["removedUsers"])) + b"".join(lp(x) for x in by_id(s["removedUsers"], None))
+    b += u32(len(s["refreshedGroups"])) + b"".join(
+        lp(g["groupId"]) + u64(g["groupKeyVersion"]) + lp(g["groupPubKey"]) for g in by_id(s["refreshedGroups"], "groupId")
     )
+    return b + lp(s["signer"]) + lp(s["signerPubKey"]) + lp(s["via"])
 
 
 def space_via_bytes(s):
     return tag("pmx-space-via") + hashlib.sha256(space_signed_bytes(s)).digest()
+
+
+def space_apply(groups, users, s):
+    """The roster after `s`, deltas applied the way both sides apply them (validity is not this file's concern)."""
+    groups = [g for g in groups if g["groupId"] not in s["removedGroups"]]
+    users = [u for u in users if u["userId"] not in s["removedUsers"]]
+    for r in s["refreshedGroups"]:
+        groups = [dict(g, groupKeyVersion=r["groupKeyVersion"], groupPubKey=r["groupPubKey"])
+                  if g["groupId"] == r["groupId"] else g for g in groups]
+    return groups + s["addedGroups"], users + s["addedUsers"]
 
 
 SPACE_ID = "5a" * 32
@@ -199,20 +239,36 @@ SPACE_USERS = [
     {"userId": "bob", "pubKey": "BOB-PK", "role": "user"},
     {"userId": "alice", "pubKey": "ALICE-PK", "role": "manager"},
 ]
-SPACE_CREATE = {
-    "spaceId": SPACE_ID, "contextId": "ctx-1", "seq": 1, "prevDigest": "", "op": "create", "date": 1760000000000,
-    "keyVersion": 1, "keyCommit": space_key_commit(SPACE_ID, 1, SPACE_KEY), "groups": SPACE_GROUPS,
-    "users": SPACE_USERS, "signer": "alice", "signerPubKey": "ALICE-PK", "via": "",
-}
-SPACE_ROTATE_VIA_GROUP = dict(
-    SPACE_CREATE, seq=2, prevDigest="33" * 32, op="rotate", keyVersion=2,
-    keyCommit=space_key_commit(SPACE_ID, 2, "22" * 32), signer="carol", signerPubKey="CAROL-PK", via="sales",
-)
-SPACE_REMOVE = dict(
-    SPACE_ROTATE_VIA_GROUP, seq=3, prevDigest="44" * 32, op="remove", keyVersion=3,
-    keyCommit=space_key_commit(SPACE_ID, 3, "33" * 32), groups=SPACE_GROUPS[:1], users=[],
-)
-SPACE_ADD = dict(SPACE_REMOVE, seq=4, prevDigest="55" * 32, op="add", users=SPACE_USERS[:1])
+NO_DELTAS = {"addedGroups": [], "addedUsers": [], "removedGroups": [], "removedUsers": [], "refreshedGroups": []}
+
+
+def space_chain():
+    """Create, a rotation through sales that refreshes sales, a removal, an addition: each with its rosterHash."""
+    steps = [
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=1, prevDigest="", op="create", date=1760000000000,
+             keyVersion=1, keyCommit=space_key_commit(SPACE_ID, 1, SPACE_KEY), addedGroups=SPACE_GROUPS,
+             addedUsers=SPACE_USERS, signer="alice", signerPubKey="ALICE-PK", via=""),
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=2, prevDigest="33" * 32, op="rotate",
+             date=1760000000001, keyVersion=2, keyCommit=space_key_commit(SPACE_ID, 2, "22" * 32),
+             refreshedGroups=[{"groupId": "sales", "groupKeyVersion": 4, "groupPubKey": "SALES-PK-4"}],
+             signer="carol", signerPubKey="CAROL-PK", via="sales"),
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=3, prevDigest="44" * 32, op="remove",
+             date=1760000000002, keyVersion=3, keyCommit=space_key_commit(SPACE_ID, 3, "33" * 32),
+             removedGroups=["Support"], removedUsers=["bob"], signer="alice", signerPubKey="ALICE-PK", via=""),
+        dict(NO_DELTAS, spaceId=SPACE_ID, contextId="ctx-1", seq=4, prevDigest="55" * 32, op="add",
+             date=1760000000003, keyVersion=3, keyCommit=space_key_commit(SPACE_ID, 3, "33" * 32),
+             addedUsers=[{"userId": "dave", "pubKey": "DAVE-PK", "role": "user"}],
+             addedGroups=[{"groupId": "billing", "role": "user", "groupKeyVersion": 2, "groupPubKey": "BILLING-PK"}],
+             signer="alice", signerPubKey="ALICE-PK", via=""),
+    ]
+    groups, users, out = [], [], []
+    for s in steps:
+        groups, users = space_apply(groups, users, s)
+        out.append(dict(s, rosterHash=space_roster_hash(groups, users).hex()))
+    return out, groups, users
+
+
+SPACE_STATEMENTS, _, _ = space_chain()
 
 
 def vectors():
@@ -221,16 +277,18 @@ def vectors():
             {"statement": s, "expectedHex": signed_bytes(s).hex()} for s in (REMOVAL, POLICY_CHANGE, ROLES, RESEAT)
         ],
         "policyHash": [
-            {"policy": p, "creator": c, "expectedHex": policy_hash(p, c)} for p, c in POLICIES
+            {"policy": p, "creator": c, "expectedHex": rules_hash(p, c)} for p, c in RULES
         ],
+        "invalidRules": INVALID_RULES,
         "spaceStatement": [
             {
                 "statement": st,
-                "recipientsHashHex": space_recipients_hash(st["groups"], st["users"]).hex(),
+                "rosterHashHex": st["rosterHash"],
                 "signedBytesHex": space_signed_bytes(st).hex(),
+                "signedBytesSha256Hex": hashlib.sha256(space_signed_bytes(st)).hexdigest(),
                 "viaBytesHex": space_via_bytes(st).hex(),
             }
-            for st in (SPACE_CREATE, SPACE_ROTATE_VIA_GROUP, SPACE_REMOVE, SPACE_ADD)
+            for st in SPACE_STATEMENTS
         ],
         "spaceKeyCommit": [
             {"spaceId": SPACE_ID, "keyVersion": v, "keyHex": k, "expectedHex": space_key_commit(SPACE_ID, v, k)}
@@ -250,9 +308,9 @@ def self_test():
     for a in TAGS:
         for b in TAGS:
             assert a == b or not b.startswith(a), (a, b)
-    # The unsigned fields really are unsigned, and the creator really is signed.
+    # The creator is signed, and the fields are positional.
     hashes = [v["expectedHex"] for v in vectors()["policyHash"]]
-    assert hashes[0] == hashes[1] == hashes[2] and hashes[3] == hashes[4] and hashes[3] != hashes[5]
+    assert len(set(hashes)) == len(hashes)
 
 
 def main(argv):

@@ -589,8 +589,8 @@ private:
         {group_updateGroupPrivateMeta, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->updateGroupPrivateMeta(args);
         }},
-        {group_updateGroupPolicy, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->group->updateGroupPolicy(args);
+        {group_updateGroupRules, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->updateGroupRules(args);
         }},
         {group_deleteGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->deleteGroup(args);
@@ -1643,7 +1643,7 @@ private:
         },
         {group_createGroup,
             "createGroup JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, rules?]\n"
             "\t\tcontextId [STRING] - ID of the Context to create the Group in\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the created Group\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -1653,7 +1653,7 @@ private:
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
-            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)"
+            "\t\trules [OBJECT] - (optional) Group's rules (GroupRulesUpdate): addMembers, removeMembers, editPublicMeta, editPrivateMeta (\"managers\", \"members\" or \"nobody\"), manage (\"managers\" or \"nobody\"); unset ones take their defaults"
         },
         {group_addGroupMembers,
             "addGroupMembers JSON_ARRAY\n"
@@ -1694,12 +1694,12 @@ private:
             "\t\tversion [NUMBER] - current privateMetaVersion of the updated Group\n"
             "\tthe version check cannot be skipped; an update built against a moved head has to be rebuilt"
         },
-        {group_updateGroupPolicy,
-            "updateGroupPolicy JSON_ARRAY\n"
-            "\tjson format - [groupId, policies]\n"
+        {group_updateGroupRules,
+            "updateGroupRules JSON_ARRAY\n"
+            "\tjson format - [groupId, rules]\n"
             "\t\tgroupId [STRING] - ID of the Group to update\n"
-            "\t\tpolicies [OBJECT] - Group's policies (ContainerPolicy)\n"
-            "\tno version and no version check: a policy change moves neither metadata counter"
+            "\t\trules [OBJECT] - the rules to change (GroupRulesUpdate); an unset one stays as it is\n"
+            "\tno version and no version check: a rules change moves neither metadata counter"
         },
         {group_deleteGroup,
             "deleteGroup JSON_ARRAY\n"
@@ -1949,7 +1949,7 @@ private:
         {group_rotateGroupKey, "Replaces a Group's key without changing its members and advances its key epoch."},
         {group_updateGroupPublicMeta, "Updates a Group's public metadata."},
         {group_updateGroupPrivateMeta, "Updates a Group's private metadata."},
-        {group_updateGroupPolicy, "Updates a Group's policies."},
+        {group_updateGroupRules, "Updates a Group's rules."},
         {group_deleteGroup, "Deletes a Group by given Group ID."},
         {group_getGroup, "Gets a Group by given Group ID."},
         {group_listGroups, "Gets a list of Groups in given Context."},
@@ -2103,7 +2103,7 @@ private:
         {group_rotateGroupKey, "Rotating group key"},
         {group_updateGroupPublicMeta, "Updating group public meta"},
         {group_updateGroupPrivateMeta, "Updating group private meta"},
-        {group_updateGroupPolicy, "Updating group policy"},
+        {group_updateGroupRules, "Updating group rules"},
         {group_deleteGroup, "Deleting group"},
         {group_getGroup, "Getting group"},
         {group_listGroups, "Getting group list"},

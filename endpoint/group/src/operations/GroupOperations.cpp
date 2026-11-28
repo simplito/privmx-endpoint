@@ -37,7 +37,7 @@ std::uint32_t GroupOperations::rotationFloorOf(
     const server::GroupGetKeyArchiveResult& archive
 ) {
     const std::uint32_t floor = keytree::GroupKeyResolver::ladderFloor(
-        archive.eraFloor, archive.archivePrunedBelow, keytree::GroupKeyResolver::newestEpoch(group, archive)
+        archive.eraFloor, keytree::GroupKeyResolver::newestEpoch(group, archive)
     );
     if (floor > group.keyVersion) {
         throw privmx::endpoint::group::StalePlan{};
@@ -49,6 +49,85 @@ keytree::GroupRules GroupOperations::requestedRules(const Poco::Dynamic::Var& po
     try {
         return keytree::TreeCommits::rules(policy, creator);
     } catch (const std::invalid_argument& e) { throw core::InvalidParamsException(e.what()); }
+}
+
+// The update's fields in `TreeCommits::ruleFields` order.
+std::vector<const std::optional<std::string>*> GroupOperations::fieldsOf(const GroupRulesUpdate& update) {
+    return {&update.addMembers,  &update.removeMembers,    &update.replaceMemberKeys, &update.changeRoles,
+            &update.changeRules, &update.changeVisibility, &update.editPublicMeta,    &update.editPrivateMeta};
+}
+
+Poco::Dynamic::Var GroupOperations::rulesObject(const GroupRulesUpdate& update, const keytree::GroupRules* base) {
+    Poco::JSON::Object::Ptr object = new Poco::JSON::Object();
+    keytree::GroupRules current = base ? *base : keytree::GroupRules{};
+    const auto fields = fieldsOf(update);
+    for (std::size_t i = 0; i < fields.size(); ++i) {
+        const std::string& name = keytree::TreeCommits::ruleFields().at(i);
+        object->set(
+            name,
+            fields[i]->has_value() ? fields[i]->value() :
+                base               ? keytree::TreeCommits::ruleOf(current, name) :
+                                     std::string("managers")
+        );
+    }
+    return object;
+}
+
+void GroupOperations::assertRule(
+    const server::GroupInfo& group,
+    std::string keytree::GroupRules::* rule,
+    const char* ruleName,
+    const std::string& what
+) {
+    const std::optional<std::string> self = keytree::GroupKeyResolver::ownUserId(group);
+    const bool manager = self.has_value() &&
+        std::find(group.managers.begin(), group.managers.end(), self.value()) != group.managers.end();
+    if (!self.has_value() ||
+        !keytree::TreeCommits::allows(GroupDataSchemaMapper::rulesOf(group).*rule, true, manager)) {
+        throw GroupUnauthorizedSignerException(what + " needs the " + ruleName + " rule");
+    }
+}
+
+void GroupOperations::assertMayChangeVisibility(const std::string& groupId) const {
+    GroupRead read = deps.facade.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
+    if (!read.verified.has_value()) {
+        throw core::InvalidParamsException("only a member of a group can change its visibility");
+    }
+    assertRule(
+        read.verified.value(), &keytree::GroupRules::changeVisibility, "changeVisibility", "a visibility change"
+    );
+}
+
+std::optional<PendingCarry> GroupOperations::narrowing(
+    const server::GroupInfo& group,
+    const Group& mapped,
+    const keytree::GroupRules& rules,
+    const std::vector<std::string>& managers,
+    const PriorRole& prior,
+    const std::string& self
+) {
+    if (mapped.statusCode != 0) {
+        return std::nullopt; // nothing attested to carry
+    }
+    const auto keeps = [&](const std::string& userId, bool publicPlane) {
+        const bool manager = std::find(managers.begin(), managers.end(), userId) != managers.end();
+        return keytree::TreeCommits::allows(GroupDataSchemaMapper::editRule(rules, publicPlane), true, manager);
+    };
+    PendingCarry carry{
+        .publicPlane = !keeps(group.publicMeta.author, true),
+        .privatePlane = !keeps(group.privateMeta.author, false),
+        .prior = prior
+    };
+    if (!carry.publicPlane && !carry.privatePlane) {
+        return std::nullopt;
+    }
+    if ((carry.publicPlane && !keeps(self, true)) || (carry.privatePlane && !keeps(self, false))) {
+        throw core::InvalidParamsException(
+            "this change would strand metadata whose author loses the rule to write it, and the caller would lose it "
+            "too"
+        );
+    }
+    return carry;
 }
 
 const VerifiedGroup& GroupOperations::planOn(const GroupRead& read) {
@@ -192,7 +271,7 @@ std::string GroupOperations::create(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies,
+    const GroupRulesUpdate& rulesUpdate,
     const std::optional<std::string>& resourceId,
     const std::optional<std::string>& visibleTo
 ) const {
@@ -288,18 +367,17 @@ std::string GroupOperations::create(
         .keyId = selfAddressed.at(0).keyId, .groupEpoch = 1, .data = selfAddressed.at(0).data
     };
     model.tree = keytree::TreeWire::toCreateTree(plan);
-    // The policy is signed into the chain: the statement carries it, and every later one its hash.
-    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(
-        policies.value_or(core::ContainerPolicy{})
-    );
+    // The rules are signed into the chain: the statement carries them, and every later one their hash.
+    const Poco::Dynamic::Var policy = rulesObject(rulesUpdate, nullptr);
     const keytree::GroupRules rules = requestedRules(policy, creatorId);
     // Commit B: a creator who could not write its own metadata would leave every member's read of the new group
     // refused. Refused before anything is signed.
     const std::vector<std::string> managerIds = core::EndpointUtils::usersWithPubKeyToIds(managers);
     const bool creatorManages = std::find(managerIds.begin(), managerIds.end(), creatorId) != managerIds.end();
-    if (!keytree::TreeCommits::allows(rules.update, true, creatorManages, true)) {
+    if (!keytree::TreeCommits::allows(rules.editPublicMeta, true, creatorManages) ||
+        !keytree::TreeCommits::allows(rules.editPrivateMeta, true, creatorManages)) {
         throw core::InvalidParamsException(
-            "the creator must hold update under the group's policy to write its metadata"
+            "the creator must hold editPublicMeta and editPrivateMeta under the group's rules to write its metadata"
         );
     }
     // The group has no id until the bridge stores it, so the first statement names the resourceId instead.
@@ -496,9 +574,7 @@ std::vector<keytree::ArchiveRung> GroupOperations::buildRotationRungs(
     keytree::LadderKeys ladder(cache);
     // Never a floor lower than one this session has seen: a bridge under-reporting it gets no rung below it.
     std::uint32_t floor = cache.raiseFloor(
-        keytree::GroupKeyResolver::ladderFloor(
-            group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion
-        )
+        keytree::GroupKeyResolver::ladderFloor(group->eraFloor.value_or(1), group->keyVersion)
     );
     // What the rungs are checked against before submitting: the chain, never the cache. Without skip targets that is
     // the verified group's own key (the unit rung's target); with them, the openers' keys (`fetchKeyArchive`).
@@ -615,6 +691,24 @@ std::optional<bool> GroupOperations::remove(
         currentGrantKey.reset(); // not the epoch's key: wrapped into the unit rung it would cut history off anyway
     }
     const bool abandonHistory = !currentGrantKey.has_value();
+    // Abandoning history (the Bridge's check, not a signed one) needs changeRules and both edit rules (the planes
+    // start over empty) beside the removal's own rules: refused here before signing. The deliberate trade-off:
+    // otherwise anyone holding removeMembers could wipe history by claiming a lost key.
+    if (abandonHistory) {
+        const std::string what = "a removal without the group's current key (it abandons the group's history)";
+        try {
+            assertRule(verified, &keytree::GroupRules::changeRules, "changeRules", what);
+            assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", what);
+            assertRule(verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", what);
+        } catch (const GroupUnauthorizedSignerException& e) {
+            throw GroupUnauthorizedSignerException(
+                std::string(e.what()) +
+                ": this session has lost the group's current key. Recover it with renewLeaf if your identity key "
+                "changed, or leave the removal to a member who still holds the key or has changeRules, "
+                "editPublicMeta and editPrivateMeta"
+            );
+        }
+    }
     // Roster plane only: a removal must not wait on a metadata entry that may sit at an older epoch. With history
     // abandoned the entry cannot be opened; the served roster, bound to the signed latest statement by
     // `verifyTree`'s roster hash, stands in for it.
@@ -703,9 +797,8 @@ std::optional<bool> GroupOperations::remove(
             // Pinned before anything reads the group again, or the next read could be the state with the leaver
             // still in.
             .landed = landedEpoch(currentGroup.contextId, statement, roster, rules, plan.grantKey),
-            .after =
-                [&metadata = metadata, groupId, abandonHistory, gone = reseat ? std::vector<std::string>() : userIds,
-                 prior] { metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, abandonHistory, gone, prior); }
+            .after = [&metadata = metadata, groupId, abandonHistory,
+                      prior] { metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, abandonHistory, prior); }
         }
     );
     return abandonHistory;
@@ -813,7 +906,7 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior) const
             // Pinned before anything reads the group again: the state under the replaced key is refused from here on.
             .landed = landedEpoch(currentGroup.contextId, statement, roster, rules, plan.grantKey),
             .after = [&metadata = metadata, groupId,
-                      prior] { metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior); }
+                      prior] { metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior); }
         }
     );
     return true;
@@ -951,9 +1044,9 @@ bool GroupOperations::selfUpdate(
     return true;
 }
 
-void GroupOperations::updatePolicy(
+void GroupOperations::updateRules(
     const std::string& groupId,
-    const core::ContainerPolicy& policies,
+    const GroupRulesUpdate& update,
     std::optional<PendingCarry>& carry
 ) const {
     // A signed commit like any other: the chain, the CAS and the role check. It moves no node, no epoch and
@@ -961,14 +1054,15 @@ void GroupOperations::updatePolicy(
     const server::GroupGetModel getModel = VerifiedGroup::pathRead(groupId);
     GroupRead read = deps.facade.read(getModel, keytree::TreeVerifier::Scope::Path);
     if (!read.verified.has_value()) {
-        throw core::InvalidParamsException("only a member of a group can change its policy");
+        throw core::InvalidParamsException("only a member of a group can change its rules");
     }
     VerifiedGroup verified = std::move(read.verified.value());
-    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies);
-    const keytree::GroupRules newRules = requestedRules(policy, verified->creator);
-    // The whole wire policy, not only the signed rules: two calls differing in a Bridge-held field (`get`, `item.*`)
-    // name different end states, and one must never return on the other.
-    const std::string op = keytree::TreeCommits::opKey("policy", {privmx::utils::Utils::stringifyVar(policy)});
+    // The fields asked for, "" for one left as it is (no rule value is empty): the end state the call names.
+    std::vector<std::string> opParts;
+    for (const auto* field : fieldsOf(update)) {
+        opParts.push_back(field->value_or(std::string()));
+    }
+    const std::string op = keytree::TreeCommits::opKey("policy", opParts);
     switch (engine.settle(groupId, op, true)) {
     case Settled::Done:
         return;
@@ -979,28 +1073,15 @@ void GroupOperations::updatePolicy(
         break;
     }
     const server::GroupInfo& group = *verified;
+    const keytree::GroupRules current = GroupDataSchemaMapper::rulesOf(verified);
+    const Poco::Dynamic::Var policy = rulesObject(update, &current);
+    const keytree::GroupRules newRules = requestedRules(policy, verified->creator);
     // Commit B: the planes as read, attested under the rules in force, and whose authors the new rules leave without
-    // `update`. Those planes would be refused once this lands; somebody who keeps `update` must carry them.
+    // the plane's rule. Those planes would be refused once this lands; somebody who keeps the rule must carry them.
     const PriorRole prior = GroupDataSchemaMapper::priorOf(verified);
-    std::vector<std::string> losers;
     const Group mapped = mapper.validateDecryptAndConvertGroup(group, keyProvider, keys.resolverOver(&verified), prior);
-    const auto keepsUpdate = [&](const std::string& userId) {
-        const bool manager = std::find(group.managers.begin(), group.managers.end(), userId) != group.managers.end();
-        return keytree::TreeCommits::allows(newRules.update, true, manager, userId == group.creator);
-    };
-    if (mapped.statusCode == 0) {
-        for (const server::GroupMetaEntry* entry : {&group.publicMeta, &group.privateMeta}) {
-            if (!keepsUpdate(entry->author) && std::find(losers.begin(), losers.end(), entry->author) == losers.end()) {
-                losers.push_back(entry->author);
-            }
-        }
-    }
     const std::string self = keytree::GroupKeyResolver::ownUserId(group).value();
-    if (!losers.empty() && !keepsUpdate(self)) {
-        throw core::InvalidParamsException(
-            "this policy would strand metadata whose author loses update, and the caller would lose it too"
-        );
-    }
+    const std::optional<PendingCarry> pending = narrowing(group, mapped, newRules, group.managers, prior, self);
     const keytree::CommitStatement latest = keytree::TreeCommits::fromWire(group.treeCommit.value());
     keytree::CommitStatement statement;
     statement.seq = latest.seq + 1;
@@ -1025,14 +1106,13 @@ void GroupOperations::updatePolicy(
         .expectedKeyVersion = group.keyVersion,
         .expectedRosterVersion = group.rosterVersion
     });
-    const PendingCarry pending{losers, prior};
     // Keys are untouched, so nothing is invalidated: the module key cache keys on `rosterVersion`, which stays.
     engine.submit(
         groupId, statement,
         UnresolvedCommit{
             .op = op,
             .namesEndState = true,
-            .kind = "policy change",
+            .kind = "rules change",
             .contextId = group.contextId,
             .send = [&serverApi = deps.serverApi, sent] { serverApi.groupUpdatePolicy(*sent); },
             .landed =
@@ -1040,14 +1120,13 @@ void GroupOperations::updatePolicy(
                  users = group.users, managers = group.managers,
                  newRules] { treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, newRules); },
             // Found landed by a later call's `settle`: the carry runs there.
-            .after = losers.empty() ?
-                std::function<void()>() :
-                [&metadata = metadata, groupId, pending] { metadata.runPolicyCarry(groupId, pending); }
+            .after = !pending ? std::function<void()>() :
+                                [&metadata = metadata, groupId, pending = pending.value()] {
+                                    metadata.runPolicyCarry(groupId, pending);
+                                }
         }
     );
-    if (!losers.empty()) {
-        carry = pending;
-    }
+    carry = pending;
 }
 
 void GroupOperations::setRoles(
@@ -1117,27 +1196,12 @@ void GroupOperations::setRoles(
         model.changes.push_back(server::GroupAddMemberEntry{.userId = id, .role = change->role});
     }
     const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
-    // The planes as read, attested under the roster in force, and whose authors the new roster leaves without
-    // `update` (a demoted manager under the default rule): refused once this lands unless somebody carries them.
+    // The planes as read, attested under the roster in force, and whose authors the new roster leaves without the
+    // plane's rule (a demoted manager under the default rules): refused once this lands unless somebody carries them.
     const PriorRole prior = GroupDataSchemaMapper::priorOf(verified);
-    std::vector<std::string> losers;
     const Group mapped = mapper.validateDecryptAndConvertGroup(group, keyProvider, keys.resolverOver(&verified), prior);
-    const auto keepsUpdate = [&](const std::string& userId) {
-        return keytree::TreeCommits::allows(rules.update, true, has(managers, userId), userId == group.creator);
-    };
-    if (mapped.statusCode == 0) {
-        for (const server::GroupMetaEntry* entry : {&group.publicMeta, &group.privateMeta}) {
-            if (!keepsUpdate(entry->author) && !has(losers, entry->author)) {
-                losers.push_back(entry->author);
-            }
-        }
-    }
     const std::string self = keytree::GroupKeyResolver::ownUserId(group).value();
-    if (!losers.empty() && !keepsUpdate(self)) {
-        throw core::InvalidParamsException(
-            "this change would strand metadata whose author loses update, and the caller would lose it too"
-        );
-    }
+    const std::optional<PendingCarry> pending = narrowing(group, mapped, rules, managers, prior, self);
 
     const int64_t newRosterVersion = group.rosterVersion + 1;
     const auto resourceId = group.resourceId.value_or(core::EndpointUtils::generateId());
@@ -1181,7 +1245,6 @@ void GroupOperations::setRoles(
     model.expectedKeyVersion = group.keyVersion;
     model.expectedRosterVersion = group.rosterVersion;
     const auto sent = std::make_shared<const server::GroupSetRolesModel>(std::move(model));
-    const PendingCarry pending{losers, prior};
     engine.submit(
         groupId, statement,
         UnresolvedCommit{
@@ -1196,12 +1259,11 @@ void GroupOperations::setRoles(
                     treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
                     invalidate(groupId);
                 },
-            .after = losers.empty() ?
-                std::function<void()>() :
-                [&metadata = metadata, groupId, pending] { metadata.runPolicyCarry(groupId, pending); }
+            .after = !pending ? std::function<void()>() :
+                                [&metadata = metadata, groupId, pending = pending.value()] {
+                                    metadata.runPolicyCarry(groupId, pending);
+                                }
         }
     );
-    if (!losers.empty()) {
-        carry = pending;
-    }
+    carry = pending;
 }

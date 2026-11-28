@@ -120,18 +120,14 @@ std::optional<RungSpan> LadderKeys::firstRungNotOpeningToTheChain(
     return std::nullopt;
 }
 
-std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(
-    std::uint32_t newEpoch,
-    std::uint32_t eraFloor,
-    std::optional<std::uint32_t> prunedBelow
-) {
+std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(std::uint32_t newEpoch, std::uint32_t eraFloor) {
     std::vector<std::uint32_t> targets;
     if (!LadderMath::requiresUnitRung(newEpoch, eraFloor)) {
         return targets; // genesis of an era: nothing below to link to
     }
-    // Only the era floor and the prune watermark may shorten this list: both are policy the bridge applies anyway,
-    // and what they cut off is gone for every member alike, unlike a key merely absent from this client's cache.
-    const std::uint32_t floor = LadderMath::descentFloor(eraFloor, prunedBelow).floor;
+    // Only the era floor may shorten this list: it is policy the bridge applies anyway, and what it cuts off is gone
+    // for every member alike, unlike a key merely absent from this client's cache.
+    const std::uint32_t floor = LadderMath::descentFloor(eraFloor).floor;
     for (const std::uint32_t target : LadderMath::skipRungTargets(newEpoch, eraFloor)) {
         if (target == newEpoch - 1 || target < floor) {
             continue; // the unit rung already covers `newEpoch - 1`
@@ -147,11 +143,10 @@ RungKeyGathering LadderKeys::gatherRungKeys(
     std::uint32_t newEpoch,
     const std::vector<ArchiveRung>& available,
     const std::vector<EpochRegistryEntry>& registry,
-    std::uint32_t eraFloor,
-    std::optional<std::uint32_t> prunedBelow
+    std::uint32_t eraFloor
 ) {
     RungKeyGathering gathering;
-    const std::vector<std::uint32_t> targets = requiredSkipTargets(newEpoch, eraFloor, prunedBelow);
+    const std::vector<std::uint32_t> targets = requiredSkipTargets(newEpoch, eraFloor);
     if (targets.empty()) {
         return gathering;
     }
@@ -174,7 +169,7 @@ RungKeyGathering LadderKeys::gatherRungKeys(
         }
         // `maxWalk` sized to this hop: the default protects a reader from a pathological rung set, but here even a
         // stretch of nothing but unit rungs must be walked, or it stays linear forever. `descend` has a visited set.
-        const DescentResult step = descend(from, target, available, registry, eraFloor, prunedBelow, from - target + 1);
+        const DescentResult step = descend(from, target, available, registry, eraFloor, from - target + 1);
         gathering.unwraps += step.hops;
         if (!step.key.has_value()) {
             gathering.complete = false;
@@ -197,8 +192,7 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
     std::uint32_t eraFloor,
     const std::string& author,
     const privmx::crypto::PrivateKey& signer,
-    bool includeSkipRungs,
-    std::optional<std::uint32_t> prunedBelow
+    bool includeSkipRungs
 ) {
     std::vector<ArchiveRung> rungs;
     if (!LadderMath::requiresUnitRung(newEpoch, eraFloor)) {
@@ -215,20 +209,8 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
             ": the previous epoch key is unavailable"
         );
     }
-    ArchiveRung unitRung;
-    unitRung.span = RungSpan{newEpoch, newEpoch - 1};
-    unitRung.blob = sealRung(previousEpochKey.value(), unitRung.span, newGrantPublicKey, signer);
-    unitRung.author = author;
-    rungs.push_back(unitRung);
-
-    if (!includeSkipRungs) {
-        return rungs;
-    }
-
-    // Emitted oldest target first, undoing the nearest-first order the gather needs.
-    const std::vector<std::uint32_t> targets = requiredSkipTargets(newEpoch, eraFloor, prunedBelow);
-    for (auto target = targets.rbegin(); target != targets.rend(); ++target) {
-        const auto targetKey = _cache.getGrantKey(*target);
+    return LadderMath::buildRungSet(newEpoch, eraFloor, includeSkipRungs, [&](const RungSpan& span) {
+        const auto targetKey = span.target == newEpoch - 1 ? previousEpochKey : _cache.getGrantKey(span.target);
         if (!targetKey.has_value()) {
             // Not a skippable optimisation. This rung can never be published again — its span is pinned to this
             // epoch — so committing the set without it orphans everything below it from the fast path forever.
@@ -236,19 +218,18 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
                 "cannot build the aligned skip rung " +
                 std::to_string(newEpoch) +
                 "->" +
-                std::to_string(*target) +
+                std::to_string(span.target) +
                 ": the grant key for epoch " +
-                std::to_string(*target) +
+                std::to_string(span.target) +
                 " is not held. Call gatherRungKeys before rotating; a rung missing from this set is unrepairable"
             );
         }
         ArchiveRung rung;
-        rung.span = RungSpan{newEpoch, *target};
-        rung.blob = sealRung(targetKey.value(), rung.span, newGrantPublicKey, signer);
+        rung.span = span;
+        rung.blob = sealRung(targetKey.value(), span, newGrantPublicKey, signer);
         rung.author = author;
-        rungs.push_back(rung);
-    }
-    return rungs;
+        return rung;
+    });
 }
 
 DescentResult LadderKeys::descend(
@@ -257,7 +238,6 @@ DescentResult LadderKeys::descend(
     const std::vector<ArchiveRung>& available,
     const std::vector<EpochRegistryEntry>& registry,
     std::uint32_t eraFloor,
-    std::optional<std::uint32_t> prunedBelow,
     std::uint32_t maxWalk
 ) {
     DescentResult result;
@@ -279,93 +259,79 @@ DescentResult LadderKeys::descend(
         return result;
     }
 
-    // Clamp the goal to whatever the era floor and prune watermark allow, and remember which one applied so the
-    // caller can explain the outcome instead of surfacing a decryption failure.
-    const DescentFloor floor = LadderMath::descentFloor(eraFloor, prunedBelow);
+    // Clamp the goal to whatever the era floor allows, and remember that it did so the caller can explain the outcome
+    // instead of surfacing a decryption failure.
+    const DescentFloor floor = LadderMath::descentFloor(eraFloor);
     std::uint32_t goal = to;
     DescentFailure floorFailure = DescentFailure::None;
     if (floor.floor > to) {
         goal = floor.floor;
-        floorFailure = floor.reason == DescentFloorReason::Pruned ? DescentFailure::Pruned :
-                                                                    DescentFailure::EraBoundary;
+        floorFailure = DescentFailure::EraBoundary;
     }
 
-    std::uint32_t current = from;
-    privmx::crypto::PrivateKey currentKey = startKey.value();
-
-    while (current > goal) {
-        if (result.hops >= maxWalk) {
-            result.failure = DescentFailure::TooLong;
-            result.reachedEpoch = current;
-            return result;
-        }
-
-        // Greedy: the smallest target not below the goal is the largest jump that does not overshoot. The span is
-        // sealed inside the blob, but the sealer is not authenticated (any holder of the epoch key can seal one), so
-        // one that does not open to its target's registered key is skipped for the next; blame only when none does.
-        std::vector<const ArchiveRung*> candidates;
-        for (const ArchiveRung& rung : available) {
-            // Direction invariant. Never traverse an upward rung, even if it somehow got stored: it is exactly
-            // the shape that would hand a removed member a later key. It also makes every hop strictly descend.
-            if (rung.span.target < rung.span.at && rung.span.at == current && rung.span.target >= goal) {
-                candidates.push_back(&rung);
-            }
-        }
-        if (candidates.empty()) {
-            result.failure = floorFailure != DescentFailure::None ? floorFailure : DescentFailure::MissingRung;
-            result.reachedEpoch = current;
-            return result;
-        }
-        std::stable_sort(candidates.begin(), candidates.end(), [](const ArchiveRung* a, const ArchiveRung* b) {
-            return a->span.target < b->span.target;
-        });
-        const ArchiveRung* best = nullptr;
-        std::optional<privmx::crypto::PrivateKey> recovered;
-        DescentResult refused = result;
-        std::set<std::uint32_t> failedTargets;
-        for (const ArchiveRung* candidate : candidates) {
-            recovered = openRung(*candidate, currentKey);
-            if (recovered.has_value() && verifyAgainstRegistry(recovered.value(), candidate->span.target, registry)) {
-                best = candidate;
-                break;
-            }
-            failedTargets.insert(candidate->span.target);
-            if (refused.failure == DescentFailure::None) {
-                refused.failure = recovered.has_value() ? DescentFailure::Tampered : DescentFailure::DecryptFailed;
-                refused.reachedEpoch = current;
+    // The walk itself is LadderMath::walkDown; what is the group's own: a rung opens with an epoch's grant key, the
+    // key it gives must be the registry's, and a failed rung is blamed on its author and reported for repair. The
+    // span is sealed inside the blob, but the sealer is not authenticated (any holder of the epoch key can seal one),
+    // so one that does not open to its target's registered key is skipped for the next; blame only when none does.
+    std::set<std::uint32_t> failedTargets; // at the current hop
+    DescentFailure hopFailure = DescentFailure::None;
+    std::optional<std::string> hopBlame;
+    const LadderWalk<privmx::crypto::PrivateKey> walk = LadderMath::walkDown(
+        from, goal, startKey.value(), maxWalk,
+        [&](std::uint32_t) -> const std::vector<ArchiveRung>& { return available; },
+        [](const ArchiveRung& rung, const privmx::crypto::PrivateKey& key) { return openRung(rung, key); },
+        [&](std::uint32_t target, const privmx::crypto::PrivateKey& key) {
+            return verifyAgainstRegistry(key, target, registry);
+        },
+        [&](const ArchiveRung& rung, bool opened) {
+            failedTargets.insert(rung.span.target);
+            if (hopFailure == DescentFailure::None) {
+                hopFailure = opened ? DescentFailure::Tampered : DescentFailure::DecryptFailed;
             }
             // Blame only a rung its epoch's opener sealed (an author), and the first such one whatever failed
             // first: an unattributed rung tried earlier (a lower span, sorted first) must not hide the opener's.
-            if (recovered.has_value() && !candidate->author.empty() && !refused.blame.has_value()) {
-                refused.failure = DescentFailure::Tampered;
-                refused.blame = candidate->author;
+            if (opened && !rung.author.empty() && !hopBlame.has_value()) {
+                hopFailure = DescentFailure::Tampered;
+                hopBlame = rung.author;
             }
-        }
-        if (best == nullptr) {
+        },
+        [&](const ArchiveRung& rung, const privmx::crypto::PrivateKey& key) {
             for (const std::uint32_t target : failedTargets) {
-                refused.brokenSpans.push_back(RungSpan{current, target});
+                if (target < rung.span.target) {
+                    result.brokenSpans.push_back(RungSpan{rung.span.at, target}); // routed around: worth a repair
+                }
             }
-            return refused;
+            failedTargets.clear();
+            hopFailure = DescentFailure::None;
+            hopBlame.reset();
+            _cache.putGrantKey(rung.span.target, key);
         }
+    );
+    result.reachedEpoch = walk.reached;
+    result.hops = walk.hops;
+    switch (walk.end) {
+    case LadderWalkEnd::TooLong:
+        result.failure = DescentFailure::TooLong;
+        return result;
+    case LadderWalkEnd::NoRung:
+        result.failure = floorFailure != DescentFailure::None ? floorFailure : DescentFailure::MissingRung;
+        return result;
+    case LadderWalkEnd::Refused:
+        result.failure = hopFailure;
+        result.blame = hopBlame;
         for (const std::uint32_t target : failedTargets) {
-            if (target < best->span.target) {
-                result.brokenSpans.push_back(RungSpan{current, target}); // routed around: worth a repair
-            }
+            result.brokenSpans.push_back(RungSpan{walk.reached, target});
         }
-
-        current = best->span.target;
-        currentKey = recovered.value();
-        _cache.putGrantKey(current, currentKey);
-        result.reachedEpoch = current;
-        ++result.hops;
+        return result;
+    case LadderWalkEnd::Reached:
+        break;
     }
-
-    if (current > to) {
+    if (walk.reached > to) {
         // We got as far as the floor allowed but not to the requested epoch. Partial progress is cached and the
         // reason is reportable — "history before X is not available to you" rather than an error.
         result.failure = floorFailure;
         return result;
     }
-    result.key = currentKey;
+    result.key = walk.key;
     return result;
 }

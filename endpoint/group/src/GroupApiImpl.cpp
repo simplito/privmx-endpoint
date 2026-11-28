@@ -128,7 +128,7 @@ std::string GroupApiImpl::createGroup(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<GroupRulesUpdate>& rules,
     const std::optional<core::Buffer>& idSeed,
     const std::string& visibleTo
 ) {
@@ -136,7 +136,7 @@ std::string GroupApiImpl::createGroup(
         throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
     }
     return _ops.create(
-        contextId, users, managers, publicMeta, privateMeta, policies,
+        contextId, users, managers, publicMeta, privateMeta, rules.value_or(GroupRulesUpdate{}),
         idSeed.has_value() ? std::optional<std::string>(resourceIdOfSeed(idSeed.value())) : std::nullopt,
         visibleTo == "members" ? std::nullopt : std::optional<std::string>(visibleTo)
     );
@@ -223,10 +223,14 @@ void GroupApiImpl::setGroupVisibility(const std::string& groupId, const std::str
     if (visibleTo != "members" && visibleTo != "context") {
         throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
     }
-    server::GroupSetVisibilityModel model;
-    model.groupId = groupId;
-    model.visibleTo = visibleTo;
-    _serverApi.groupSetVisibility(model);
+    // ROTATED_ALREADY: a commit landed between the read and the call; checked and sent again, as any group write.
+    CommitEngine::commitWithRetry([&] {
+        _ops.assertMayChangeVisibility(groupId);
+        server::GroupSetVisibilityModel model;
+        model.groupId = groupId;
+        model.visibleTo = visibleTo;
+        _serverApi.groupSetVisibility(model);
+    });
 }
 
 void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
@@ -251,7 +255,7 @@ int64_t GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::
     // still holds. Move it up. Outside the write above on purpose — see the header. Already done when an earlier
     // call's removal turned out to have landed (`settle`).
     if (historyAbandoned.has_value()) {
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), userIds, prior);
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), prior);
     }
     runDueWork(groupId);
     // The epoch this client committed, or verified when an earlier call's removal turned out to have landed.
@@ -267,7 +271,7 @@ int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     // so nobody is accepted as an author beyond the members. Already done when an earlier call's rotation turned out
     // to have landed (`settle`).
     if (committedHere) {
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior);
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior);
     }
     runDueWork(groupId);
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
@@ -281,7 +285,7 @@ int64_t GroupApiImpl::replaceGroupMemberKeys(const std::string& groupId, const s
     // As after a rotation: the planes sit one epoch behind, and nobody left, so nobody beyond the members is accepted
     // as an author.
     if (historyAbandoned.has_value()) {
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), {}, prior);
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), prior);
     }
     runDueWork(groupId);
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
@@ -303,7 +307,7 @@ void GroupApiImpl::setGroupRoles(const std::string& groupId, const std::vector<G
         carry.reset();
         _ops.setRoles(groupId, changes, carry);
     });
-    // A plane whose author lost `update` with its role is refused from now on; carry it under the caller's name.
+    // A plane whose author lost its rule with its role is refused from now on; carry it under the caller's name.
     if (carry.has_value()) {
         _metadata.runPolicyCarry(groupId, carry.value());
     }
@@ -311,18 +315,17 @@ void GroupApiImpl::setGroupRoles(const std::string& groupId, const std::vector<G
 }
 
 void GroupApiImpl::updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules) {
-    // The rules are three fields of the policy: the rest of it is carried over as the Group has it.
-    core::ContainerPolicy policy = getGroup(groupId).policy;
-    if (rules.addMembers.has_value()) {
-        policy.addMembers = rules.addMembers;
+    _metadata.retryPendingCarry(groupId);
+    std::optional<PendingCarry> carry;
+    CommitEngine::commitWithRetry([&] {
+        carry.reset();
+        _ops.updateRules(groupId, rules, carry);
+    });
+    // A plane whose author lost its rule is refused from now on; carry it under the caller's name.
+    if (carry.has_value()) {
+        _metadata.runPolicyCarry(groupId, carry.value());
     }
-    if (rules.removeMembers.has_value()) {
-        policy.removeMembers = rules.removeMembers;
-    }
-    if (rules.updateMeta.has_value()) {
-        policy.update = rules.updateMeta;
-    }
-    updateGroupPolicy(groupId, policy);
+    runDueWork(groupId);
 }
 
 core::PagingList<GroupLogEntry> GroupApiImpl::getGroupLog(
@@ -456,20 +459,6 @@ void GroupApiImpl::updateGroupPrivateMeta(
 ) {
     _metadata.writeMeta(readGroupForKeys(groupId), false, privateMeta, version);
     _metadata.retryPendingCarry(groupId);
-    runDueWork(groupId);
-}
-
-void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
-    _metadata.retryPendingCarry(groupId);
-    std::optional<PendingCarry> carry;
-    CommitEngine::commitWithRetry([&] {
-        carry.reset();
-        _ops.updatePolicy(groupId, policies, carry);
-    });
-    // A plane whose author lost `update` is refused from now on; carry it under the caller's name.
-    if (carry.has_value()) {
-        _metadata.runPolicyCarry(groupId, carry.value());
-    }
     runDueWork(groupId);
 }
 
@@ -1433,10 +1422,10 @@ DecryptedOutsiderEnvelope GroupApiImpl::decryptFromOutsider(
     const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     requireFor(routing, groupId, ENVELOPE_FROM_OUTSIDER);
 
+    std::int64_t epoch = 0;
     const OpenedEnvelope opened = _envelopeEncryptor.openOutsiderEnvelope(
-        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
+        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey, &epoch), binding
     );
-    const std::int64_t epoch = _keys.grantEpochOf(groupId, routing.groupPubKey);
     RosterView roster = rosterOf(groupId);
     if (options.currentEpochOnly && epoch != roster.keyVersion) {
         // The epoch was just looked up, the roster may be a cached one behind it: read again before refusing (as
@@ -1466,12 +1455,11 @@ DecryptedAnonymousEnvelope GroupApiImpl::decryptAnonymous(
     const EnvelopeBinding binding = bindingOf(location, content);
     const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     requireFor(routing, groupId, ENVELOPE_ANONYMOUS);
+    std::int64_t epoch = 0;
     const OpenedEnvelope opened = _envelopeEncryptor.openAnonymousEnvelope(
-        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
+        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey, &epoch), binding
     );
-    return DecryptedAnonymousEnvelope{
-        .data = opened.data, .keyVersion = _keys.grantEpochOf(groupId, routing.groupPubKey)
-    };
+    return DecryptedAnonymousEnvelope{.data = opened.data, .keyVersion = epoch};
 }
 
 DecryptedSharedEnvelope GroupApiImpl::decryptShared(
@@ -1509,16 +1497,34 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
             via = "user";
         }
     }
-    for (std::size_t i = 0; i < routing.recipients.size() && !opened.has_value(); ++i) {
+    // The recipient groups come off the unsigned header, and each unknown one costs a request: groups this client
+    // already holds (a session or a pin) first, then at most MAX_SHARED_LOOKUPS others.
+    std::vector<std::size_t> order;
+    for (const bool known : {true, false}) {
+        for (std::size_t i = 0; i < routing.recipients.size(); ++i) {
+            const WireRecipient& recipient = routing.recipients[i];
+            if (recipient.isGroup &&
+                (_sessions.find(recipient.id) != nullptr || _treeVerifier.pinnedSeq(recipient.id) > 0) == known) {
+                order.push_back(i);
+            }
+        }
+    }
+    std::size_t remote = 0;
+    for (std::size_t n = 0; n < order.size() && !opened.has_value(); ++n) {
+        const std::size_t i = order[n];
         const WireRecipient& recipient = routing.recipients[i];
-        if (!recipient.isGroup) {
-            continue;
+        const bool known = _sessions.find(recipient.id) != nullptr || _treeVerifier.pinnedSeq(recipient.id) > 0;
+        if (!known && ++remote > MAX_SHARED_LOOKUPS) {
+            break;
         }
         std::optional<privmx::crypto::PrivateKey> groupKey;
         try {
             core::Validator::validateId(recipient.id, "field:envelope.recipient ");
             groupKey = _keys.grantKeyForPubKey(recipient.id, recipient.pubKey);
-        } catch (const core::Exception&) {
+        } catch (const core::Exception& e) {
+            if (isForgedHistory(e)) {
+                throw; // a history that does not hold is the answer, never "not a recipient"
+            }
             continue; // not a group of the caller's, or not a key of that group
         }
         // From here a failure is about the envelope, not about who the caller is: it is reported.
@@ -1760,7 +1766,7 @@ CipherOffset GroupApiImpl::seekInEncryptedFile(FileHandle fileHandle, FilePositi
 }
 
 DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
-    EnvelopeFileState state = _envelopeFiles.finish(fileHandle, true);
+    EnvelopeFileState state = _envelopeFiles.finish(fileHandle);
     state.info.complete = !state.seeked;
     return state.info;
 }

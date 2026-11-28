@@ -121,8 +121,6 @@ ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutIt
         ),
         .rotateKeys = deserializeOptional<std::string>(obj->get("rotateKeys"), name + ".rotateKeys"),
         .forwardSecrecy = deserializeOptional<std::string>(obj->get("forwardSecrecy"), name + ".forwardSecrecy"),
-        .addMembers = deserializeOptional<std::string>(obj->get("addMembers"), name + ".addMembers"),
-        .removeMembers = deserializeOptional<std::string>(obj->get("removeMembers"), name + ".removeMembers"),
     };
 }
 
@@ -158,8 +156,6 @@ ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynami
     // The same fields as ContainerPolicyWithoutItem above: one left out here is one a binding silently drops.
     result.rotateKeys = deserializeOptional<std::string>(obj->get("rotateKeys"), name + ".rotateKeys");
     result.forwardSecrecy = deserializeOptional<std::string>(obj->get("forwardSecrecy"), name + ".forwardSecrecy");
-    result.addMembers = deserializeOptional<std::string>(obj->get("addMembers"), name + ".addMembers");
-    result.removeMembers = deserializeOptional<std::string>(obj->get("removeMembers"), name + ".removeMembers");
     result.item = deserializeOptional<ItemPolicy>(obj->get("item"), name + ".item");
     return result;
 }

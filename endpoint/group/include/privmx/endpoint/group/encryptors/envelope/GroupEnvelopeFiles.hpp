@@ -45,7 +45,7 @@ public:
     CipherRange cipherRange(FileHandle fileHandle, FilePosition from, FilePosition to);
     static ByteCount plainSizeOf(const EnvelopeFileState& state);
     // The reader's finish: completeness check, then close and release whatever the outcome.
-    EnvelopeFileState finish(FileHandle fileHandle, bool wantReading);
+    EnvelopeFileState finish(FileHandle fileHandle);
     // The writer's finish: `seal` runs on the state under the handle's lock, and the handle is released only once it
     // returns. A seal that throws (a network error, a key rotated meanwhile) leaves the handle open, to finish again
     // or to `abort`: the upload is not lost.

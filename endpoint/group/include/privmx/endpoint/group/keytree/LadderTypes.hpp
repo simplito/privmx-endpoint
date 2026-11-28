@@ -53,8 +53,6 @@ enum class DescentFailure {
     None,
     // Reached an era floor. Normal policy — an entitlement matter, not an error.
     EraBoundary,
-    // Reached a prune watermark. Normal retention policy.
-    Pruned,
     // The chain is broken: no rung leads on from an epoch we reached.
     MissingRung,
     // A rung did not open with the key we hold.

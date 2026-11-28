@@ -131,25 +131,6 @@ protected:
         return "";
     }
 
-    // A rotation sent straight to the Bridge, valid in shape only (its grant edge is not).
-    void sendRawRotation(const std::string& groupId) {
-        group::ServerApi api(connection->getImpl()->getGateway());
-        const auto current = api.groupGet({.groupId = groupId, .scope = std::string("plan")}).group;
-        const auto groupPubKey = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
-        group::server::GroupGenerateNewKeyModel model;
-        model.id = groupId;
-        model.groupPubKey = groupPubKey;
-        model.data = Poco::Dynamic::Var(std::string("x"));
-        model.keyId = "m3-raw";
-        model.grantEdge = {.isGrantEdge = true, .parentIndex = 0, .parentGeneration = 0, .childKind = "node",
-                           .childIndex = 0, .childGeneration = 0, .childUserId = std::nullopt, .data = "x"};
-        model.commit = nextStatement(api, groupId, groupPubKey);
-        model.rungs = {{.atKeyVersion = current.keyVersion + 1, .targetKeyVersion = current.keyVersion, .data = "x"}};
-        model.expectedKeyVersion = current.keyVersion;
-        model.expectedRosterVersion = current.rosterVersion;
-        api.groupGenerateNewKey(model);
-    }
-
     // The latest served statement, extended by one (anything else is a lost race, answered before the key is
     // looked at) and re-signed by this session: shape-valid; only its seq, link and key differ.
     group::server::GroupTreeCommit nextStatement(
@@ -948,27 +929,23 @@ TEST_F(GroupKeyTreeTest, rotateGroupKey_advances_the_epoch_for_the_same_members)
     connectAs(1);
 }
 
-TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_rotate_the_group_key) {
-    // A rotation stales every container granted to the group: the `rotateKeys` policy (managers, by default) gates
-    // it on the bridge, whatever a member can compute.
+TEST_F(GroupKeyTreeTest, a_plain_member_may_rotate_the_group_key) {
+    // Rotation is a fixed right of every member (no rule gates it; the Bridge rate-limits it).
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     disconnect();
     connectAs(2);
-    EXPECT_THROW({ groupApi->rotateGroupKey(groupId); }, core::Exception) << "a non-manager rotated the group key";
-    // The client refuses that before sending anything; this is what the Bridge says to one sent anyway.
-    auto refused = refusalOf([&] { sendRawRotation(groupId); });
-    ASSERT_TRUE(refused.has_value()) << "the bridge let a non-manager rotate";
-    EXPECT_EQ(refused->first, ACCESS_DENIED) << refused->second;
+    int64_t epoch = 0;
+    ASSERT_NO_THROW({ epoch = groupApi->rotateGroupKey(groupId); }) << "a plain member could not rotate";
+    EXPECT_EQ(epoch, 2);
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.keyVersion, 1) << "nothing was committed";
+    EXPECT_EQ(after.keyVersion, 2);
+    EXPECT_EQ(after.statusCode, 0);
     disconnect();
     connectAs(1);
-    // Control: the same rotation from a manager gets past the policy gate, so the refusal above is about the caller.
-    refused = refusalOf([&] { sendRawRotation(groupId); });
-    ASSERT_TRUE(refused.has_value()) << "a shape-only rotation was accepted";
-    EXPECT_NE(refused->first, ACCESS_DENIED) << refused->second;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0) << "the manager follows a plain member's rotation";
 }
 
 // -- rejections the server owes us --
@@ -1027,13 +1004,13 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
     // The client refuses that before sending anything; this is what the Bridge says to one sent anyway.
     const auto fresh = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
     const auto refusal = rawRemovalRefusal(groupId, user(3).userId, fresh);
-    EXPECT_NE(refusal.find("policy is not met"), std::string::npos) << "the bridge let a non-manager remove: " << refusal;
+    EXPECT_NE(refusal.find("removeMembers rule is not met"), std::string::npos) << "the bridge let a non-manager remove: " << refusal;
     disconnect();
     connectAs(1);
     // Control: the same removal from a manager gets past the policy gate, so the refusal above is about the caller.
     const auto control = rawRemovalRefusal(groupId, user(3).userId, fresh);
     EXPECT_FALSE(control.empty()) << "a shape-only removal was accepted";
-    EXPECT_EQ(control.find("policy is not met"), std::string::npos) << control;
+    EXPECT_EQ(control.find("rule is not met"), std::string::npos) << control;
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(3).userId), after.users.end());
@@ -1042,9 +1019,9 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
 
 // -- grant key reuse --
 
-TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_floor_is_refused) {
-    // Every member of an old epoch holds its grant key's private half, the ones removed since included. A cut drops
-    // the old epochs' rows, so the Bridge must find the old keys in the statements, which no cut touches.
+TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_of_an_earlier_epoch_is_refused) {
+    // Every member of an old epoch holds its grant key's private half, the ones removed since included: the Bridge
+    // finds the old keys in the statements and refuses them for a new epoch.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     std::string k1, k2;
@@ -1054,19 +1031,11 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_flo
     ASSERT_NO_THROW({ groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}}); });
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
 
-    group::ServerApi api(connection->getImpl()->getGateway());
-    ASSERT_NO_THROW({ api.groupCutEra({.id = groupId, .newFloor = 3, .expectedKeyVersion = 3}); });
-
-    group::server::GroupGetTreeCommitsResult served;
-    ASSERT_NO_THROW({ served = api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}); });
-    ASSERT_GE(served.commits.size(), 4u) << "create, remove, add, remove";
-    EXPECT_EQ(served.commits.front().seq, 1) << "the cut took statements with it";
-    EXPECT_EQ(static_cast<int64_t>(served.commits.size()), served.commits.back().seq) << "the statements are no longer contiguous";
 
     for (const auto& old : {k1, k2}) {
         const auto refusal = rawRemovalRefusal(groupId, user(2).userId, old);
         EXPECT_NE(refusal.find("groupPubKey of an earlier epoch"), std::string::npos)
-            << "a key from below the era floor was not recognised: " << refusal;
+            << "a key of an earlier epoch was not recognised: " << refusal;
     }
     // Control: the same model with a fresh key gets past the reuse check, so the refusal above is about the key.
     const auto fresh = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
@@ -1077,6 +1046,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_flo
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_EQ(after.keyVersion, 3);
+    EXPECT_EQ(after.statusCode, 0);
     EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
 }
 
@@ -1219,21 +1189,12 @@ TEST_F(GroupKeyTreeTest, the_key_archive_window_also_windows_keyHistory) {
     EXPECT_EQ(epochsServed(1, 9), (std::vector<std::int64_t>{1, 2, 3})) << "only the epochs behind the current one";
 }
 
-TEST_F(GroupKeyTreeTest, SECURITY_repairRung_below_a_cut_floor_is_refused) {
-    std::string groupId;
-    ASSERT_NO_THROW({ groupId = groupAtEpoch(3); });
-    ASSERT_NO_THROW({ raw().groupCutEra({.id = groupId, .newFloor = 2, .expectedKeyVersion = 3}); });
-    const auto refused = refusalOf([&] { repair(groupId, garbageRung(3, 1)); });
-    ASSERT_TRUE(refused.has_value());
-    EXPECT_EQ(refused->first, GROUP_ARCHIVE_INVALID);
-    EXPECT_NE(refused->second.find("BELOW_ERA_FLOOR"), std::string::npos) << refused->second;
-}
-
 // ── the signed group policy ──
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_member_follows) {
-    // The manager lets every member update; a plain member then removes that manager; a third session, pinned before
-    // either, replays both from its pin: the policy statement, then a removal its committer now holds the role for.
+    // The manager lets every member remove members, change roles and write metadata; a plain member then removes
+    // that manager; a third session, pinned before either, replays both from its pin: the rules statement, then a
+    // removal its committer now holds the rules for.
     // user_3 manages too: a group that has managers keeps one, so the last of them cannot be removed.
     std::string groupId;
     ASSERT_NO_THROW({
@@ -1246,9 +1207,17 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_membe
     group::GroupApi thirdGroups = group::GroupApi::create(*third);
     ASSERT_EQ(thirdGroups.getGroup(groupId).statusCode, 0);
 
-    core::ContainerPolicy everyMember;
-    everyMember.update = "user";
-    ASSERT_NO_THROW({ groupApi->updateGroupPolicy(groupId, everyMember); });
+    ASSERT_NO_THROW({
+        groupApi->updateGroupRules(
+            groupId,
+            group::GroupRulesUpdate{
+                .removeMembers = "members",
+                .changeRoles = "members",
+                .editPublicMeta = "members", // the remover carries the planes up under its own name
+                .editPrivateMeta = "members"
+            }
+        );
+    });
     disconnect();
     connectAs(2);
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(1).userId}); });
@@ -1257,7 +1226,8 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_membe
     ASSERT_NO_THROW({ followed = thirdGroups.getGroup(groupId); });
     EXPECT_EQ(followed.statusCode, 0);
     EXPECT_EQ(followed.keyVersion, 2);
-    EXPECT_EQ(followed.policy.update.value_or(""), "user");
+    EXPECT_EQ(followed.rules.removeMembers, "members");
+    EXPECT_EQ(followed.rules.changeRoles, "members");
     EXPECT_EQ(followed.privateMeta.stdString(), "keytree_private") << "carried up by the new remover";
     const auto commits = group::ServerApi(connection->getImpl()->getGateway())
                              .groupGetTreeCommits({.groupId = groupId, .fromSeq = 0})
@@ -1271,7 +1241,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_membe
 }
 
 TEST_F(GroupKeyTreeTest, a_user_cannot_remove_under_the_default_policy) {
-    // Only managers update by default. The client refuses before signing, so nothing reaches the Bridge and the
+    // Only managers remove members or change the rules by default. The client refuses before signing, so nothing reaches the Bridge and the
     // chain does not move. (The Bridge's own refusal of a hand-built statement is its test, not this one.)
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
@@ -1284,7 +1254,10 @@ TEST_F(GroupKeyTreeTest, a_user_cannot_remove_under_the_default_policy) {
     };
     const std::size_t before = seq();
     EXPECT_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); }, group::GroupUnauthorizedSignerException);
-    EXPECT_THROW({ groupApi->updateGroupPolicy(groupId, core::ContainerPolicy{}); }, group::GroupUnauthorizedSignerException);
+    EXPECT_THROW(
+        { groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.addMembers = "members"}); },
+        group::GroupUnauthorizedSignerException
+    );
     EXPECT_EQ(seq(), before);
     disconnect();
     connectAs(1);

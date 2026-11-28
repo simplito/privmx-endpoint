@@ -133,14 +133,11 @@ keytree::ResolveResult GroupKeys::resolveDescending(
     // Anything but a broken or missing rung is the answer: the whole window would refuse the same way.
     const auto settled = [](const keytree::ResolveResult& resolved) {
         return resolved.failure != keytree::ResolveFailure::DescentFailed ||
-            resolved.descent == keytree::DescentFailure::EraBoundary ||
-            resolved.descent == keytree::DescentFailure::Pruned;
+            resolved.descent == keytree::DescentFailure::EraBoundary;
     };
     const std::uint32_t current = keytree::GroupKeyResolver::epochOf(group->keyVersion);
     const std::uint32_t floor = deps.sessions.of(group->id)->treeKeys()->raiseFloor(
-        keytree::GroupKeyResolver::ladderFloor(
-            group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion
-        )
+        keytree::GroupKeyResolver::ladderFloor(group->eraFloor.value_or(1), group->keyVersion)
     );
     // Below the floor the descent ends at the floor whatever was fetched, so the path goes no lower.
     const std::uint32_t goal = std::max(static_cast<std::uint32_t>(epoch), floor);
@@ -157,11 +154,6 @@ keytree::ResolveResult GroupKeys::resolveDescending(
         const server::GroupGetKeyArchiveResult around = fetchKeyArchive(group, detour);
         archive.rungs.insert(archive.rungs.end(), around.rungs.begin(), around.rungs.end());
         archive.eraFloor = std::max(archive.eraFloor, around.eraFloor);
-        if (around.archivePrunedBelow.has_value()) {
-            archive.archivePrunedBelow = std::max(
-                archive.archivePrunedBelow.value_or(1), around.archivePrunedBelow.value()
-            );
-        }
         resolved = resolver.resolve(group, epoch, ownKey, archive);
         if (settled(resolved)) {
             return resolved;
@@ -205,7 +197,7 @@ server::GroupGetKeyArchiveResult GroupKeys::fetchKeyArchive(
     deps.sessions.of(group->id)->treeKeys()->raiseFloor(
         std::min(
             keytree::GroupKeyResolver::ladderFloor(
-                archive.eraFloor, archive.archivePrunedBelow, keytree::GroupKeyResolver::newestEpoch(group, archive)
+                archive.eraFloor, keytree::GroupKeyResolver::newestEpoch(group, archive)
             ),
             keytree::GroupKeyResolver::epochOf(group->keyVersion)
         )
@@ -252,8 +244,6 @@ std::string GroupKeys::describeResolveFailure(const keytree::ResolveResult& reso
         switch (resolved.descent) {
         case keytree::DescentFailure::EraBoundary:
             return "History before this era is not available to you";
-        case keytree::DescentFailure::Pruned:
-            return "History this old has been pruned and is no longer recoverable";
         case keytree::DescentFailure::Tampered:
             return "Epoch ladder verification failed" + blameSuffix(resolved.blame, "rung published by");
         default:
@@ -408,22 +398,20 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
     return found;
 }
 
-std::int64_t GroupKeys::grantEpochOf(const std::string& groupId, const std::string& groupPubKeyBase58) const {
-    if (const auto session = deps.sessions.find(groupId)) {
-        return session->envelopeGrantEpochs.get(groupPubKeyBase58).value_or(0);
-    }
-    return 0;
-}
-
 privmx::crypto::PrivateKey GroupKeys::grantKeyForPubKey(
     const std::string& groupId,
-    const std::string& groupPubKeyBase58
+    const std::string& groupPubKeyBase58,
+    std::int64_t* epochOut
 ) const {
     // A published grant public key's epoch is immutable, so the lookup is memoized like the envelope keys.
     // Without it every anonymous envelope pays a `groupGet` here on top of `resolveGroupPrivKey`'s.
     if (const auto session = deps.sessions.find(groupId)) {
         if (auto cached = session->envelopeGrantEpochs.get(groupPubKeyBase58); cached.has_value()) {
-            return resolveGroupPrivKey(groupId, cached.value(), nullptr, nullptr);
+            privmx::crypto::PrivateKey key = resolveGroupPrivKey(groupId, cached.value(), nullptr, nullptr);
+            if (epochOut != nullptr) {
+                *epochOut = cached.value();
+            }
+            return key;
         }
     }
 
@@ -438,6 +426,9 @@ privmx::crypto::PrivateKey GroupKeys::grantKeyForPubKey(
             const privmx::crypto::PrivateKey key = resolveGroupPrivKey(groupId, entry.keyVersion, nullptr, nullptr);
             if (key.getPublicKey() == target) {
                 deps.sessions.of(groupId)->envelopeGrantEpochs.set(groupPubKeyBase58, entry.keyVersion);
+                if (epochOut != nullptr) {
+                    *epochOut = entry.keyVersion;
+                }
                 return key;
             }
         }

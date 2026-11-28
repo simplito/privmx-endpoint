@@ -34,8 +34,8 @@ limitations under the License.
  * (`treeVersion` at the top): buckets of 16 seats, blank nodes without a `publicKey`, filled ones with `setBy`.
  * Every user who signs is in the top-level `userPubKeys`; ids are global, so a user's key is the same in every case.
  * A group is "grp", except at seq 1 where its statement names the resourceId "res". Every case also carries the
- * group's policy and creator after its commit (`groupPolicy`, `groupCreator`), which the statement's `policyHash`
- * signs; `policy` cases are policy commits, whose `before` and `after` are the same tree.
+ * group's rules and creator after its commit (`groupPolicy`, `groupCreator`), which the statement's `policyHash`
+ * (the rulesHash) signs; `policy` cases are rules commits, whose `before` and `after` are the same tree.
  *
  * Usage: keytree_state_dump > src/test/fixtures/keytree-states.json   (paths relative to the bridge repo)
  * See test/tools/README.md.
@@ -192,6 +192,18 @@ std::string refreshedToJson(const CommitPlan& plan) {
 }
 
 // A tree-backed group as the bridge stores it, with the members' private halves.
+// A rules object: every rule "managers" but those given.
+Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rules) {
+    Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
+    for (const std::string& field : TreeCommits::ruleFields()) {
+        policy->set(field, "managers");
+    }
+    for (const auto& [field, rule] : rules) {
+        policy->set(field, rule);
+    }
+    return policy;
+}
+
 struct Group {
     std::vector<Member> members;
     server::GroupTreeState tree;
@@ -203,7 +215,7 @@ struct Group {
     TreeKeyCache grantKeys; // every epoch's grant key, for the rungs a removal publishes
     std::string lastDigest; // of the latest statement, which the next one chains to
     std::string creator;
-    Poco::Dynamic::Var policy = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
+    Poco::Dynamic::Var policy = policyOf({});
 
     std::vector<std::string> seated() const {
         std::vector<std::string> ids;
@@ -392,7 +404,7 @@ std::string groupSelfUpdate(Group& group, const std::string& memberId) {
         + ",\"after\":" + treeToJson(group.tree) + "}";
 }
 
-// A policy commit by `memberId`, as `GroupApiImpl::updateGroupPolicy` signs it: everything as the latest statement
+// A rules commit by `memberId`, as `GroupApiImpl::updateGroupRules` signs it: everything as the latest statement
 // says but the policy.
 std::string groupPolicyChange(Group& group, const std::string& memberId, const Poco::Dynamic::Var& policy) {
     group.policy = policy;
@@ -421,13 +433,6 @@ std::string groupPolicyChange(Group& group, const std::string& memberId, const P
         + ",\"after\":" + treeToJson(group.tree) + "}";
 }
 
-Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rules) {
-    Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
-    for (const auto& [field, rule] : rules) {
-        policy->set(field, rule);
-    }
-    return policy;
-}
 
 std::string u(std::uint32_t i) {
     return "u" + std::to_string(i);
@@ -588,7 +593,7 @@ int main() {
         {
             Group group;
             groupCreate(group, 5, 0);
-            cases.push_back(groupPolicyChange(group, u(0), policyOf({{"update", "user"}, {"get", "all"}})));
+            cases.push_back(groupPolicyChange(group, u(0), policyOf({{"addMembers", "members"}, {"removeMembers", "members"}})));
             cases.push_back(groupRemove(group, u(3), {u(4)}));
             cases.push_back(groupPolicyChange(group, u(1), policyOf({})));
             cases.push_back(groupSelfUpdate(group, u(2)));

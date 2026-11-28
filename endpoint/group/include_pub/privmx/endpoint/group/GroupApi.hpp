@@ -21,7 +21,10 @@ class GroupApiImpl;
 /**
  * 'GroupApi' is a class representing Endpoint's API for Groups.
  *
- * A membership, key or policy change that failed may still take effect: the Bridge may have applied it and lost or
+ * A Group created before group rules existed (Bridge 3.1.0) is refused with server::GroupRulesUnsupportedException
+ * on every commit: it must be recreated.
+ *
+ * A membership, key or rules change that failed may still take effect: the Bridge may have applied it and lost or
  * refused the answer. For a bounded time, or until the Group changes in some other way, this client resends that
  * change before it makes any other change to the Group: a retry of the same call resends it (and returns once it is
  * found applied), and a different call completes it first. Key refreshes never hold anything back.
@@ -62,10 +65,10 @@ public:
      * rights) to the created Group
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
-     * @param policies Group's policies. Who may add, remove, rotate and change the policy (`update`, `rotateKeys`,
-     * `updatePolicy`, `ownerCanBeRemovedFromManagers`) is signed into the Group's state with the creator;
-     * `inherit`/`default` (or absent) mean the built-in defaults (manager, manager, manager, yes), not the
-     * Context's; the Context can only deny further. The creator must hold `update` under them, or it could not write the Group's metadata.
+     * @param rules Group's rules (GroupRules), signed into the Group's state with the creator; an unset one takes
+     * its default ("managers"). GroupRulesUpdate::createImmutable is the preset of a Group
+     * whose membership, roles and rules never change. The creator must hold `editPublicMeta` and `editPrivateMeta`
+     * under them, or it could not write the Group's metadata.
      * @return ID of the created Group
      */
     std::string createGroup(
@@ -74,7 +77,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::optional<GroupRulesUpdate>& rules = std::nullopt,
         const std::optional<core::Buffer>& idSeed = std::nullopt,
         const std::string& visibleTo = "members"
     );
@@ -102,8 +105,9 @@ public:
 
     /**
      * Sets who beside the members may read the Group's identity key, roster and statements: "members" or
-     * "context". A manager's call. Making a Group visible to the Context is what lets someone outside it write to
-     * it with `encryptAsOutsider`; it also shows the roster to every user of the Context.
+     * "context". Allowed by the `changeVisibility` rule (checked here on a verified read, and by the Bridge); the
+     * visibility itself is the Bridge's setting, not signed. Making a Group visible to the Context is what lets
+     * someone outside it write to it with `encryptAsOutsider`; it also shows the roster to every user of the Context.
      */
     void setGroupVisibility(const std::string& groupId, const std::string& visibleTo);
 
@@ -121,6 +125,8 @@ public:
      * A failed call may still take effect (see the class note); it is resent only while the UserVerifier still
      * vouches for the newcomers' keys.
      *
+     * Allowed by the `addMembers` rule; adding a manager also needs `changeRoles`.
+     *
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
      */
@@ -136,12 +142,23 @@ public:
      * Incremental: only the leavers are named, and the roster that remains is derived from the Group's own
      * verified history. Metadata carries through untouched.
      *
-     * A failed call may still take effect (see the class note).
+     * Allowed by the `removeMembers` rule; removing a manager also needs `changeRoles`. The caller cannot remove
+     * itself (it mints the new epoch's key, so it would hold the key meant to exclude it): another member removes
+     * it. Refused when it would leave a Group that has managers with none. A failed call may still take effect (see
+     * the class note).
+     *
+     * The metadata planes are carried up to the new epoch under the caller's name, each only if the caller holds its
+     * rule (`editPublicMeta` / `editPrivateMeta`). A plane written by a removed member that the caller may not carry
+     * is refused by readers until a member holding the rule rewrites it (a warning is logged).
      *
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
-     * every member. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
-     * refused instead while the previous key still opens the leaf: call renewLeaf first.
+     * every member, which needs `changeRules`, `editPublicMeta` and `editPrivateMeta` beside the removal's own
+     * rules, and is refused by the Bridge while a Space names the Group. Without those rules it is refused before
+     * anything is sent (GroupUnauthorizedSignerException): the caller has lost the Group's current key; recover it
+     * with renewLeaf if its identity key changed, or leave the removal to a member who still holds the key or has
+     * those rules. After the caller's identity key changed and Connection::adoptPreviousIdentity was
+     * called, it is refused instead while the previous key still opens the leaf: call renewLeaf first.
      *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
@@ -158,8 +175,7 @@ public:
      * take the old key for the current one. Content sealed before stays readable to the members.
      *
      * Not a remedy for a lost device: a device holding the identity key opens the new epoch as well. Change the
-     * identity key first, then rotate. Charged to the Group's rotation budget; allowed by the `rotateKeys` policy
-     * (managers, by default).
+     * identity key first, then rotate. Charged to the Group's rotation budget; any member may rotate.
      *
      * A failed call may still take effect (see the class note). A call made after it was found applied is a new
      * rotation.
@@ -177,7 +193,9 @@ public:
      * The members' current keys go through the Connection's UserVerifier like any key this client wraps to: with
      * key continuity on (Connection::useKeyContinuity), accept the change first (Connection::acceptKeyChange).
      *
-     * Allowed by the `removeMembers` rule. The caller cannot be among `userIds`. A failed call may still take
+     * Allowed by the `replaceMemberKeys` rule. The caller cannot be among `userIds`. A caller that has lost the
+     * Group's current key abandons its history, under the same extra rules and with the same refusal as
+     * removeGroupMembers (renewLeaf, or a member who still holds the key, then). A failed call may still take
      * effect (see the class note).
      *
      * @param groupId ID of the Group
@@ -190,8 +208,11 @@ public:
      * Changes the role of members already in the Group. No key moves: a role decides what the Bridge and the other
      * members accept from somebody, not what they can read.
      *
-     * Allowed by the `updatePolicy` rule (managers, by default). Refused when it would leave a Group that has
-     * managers with none. A failed call may still take effect (see the class note).
+     * Allowed by the `changeRoles` rule. Refused when it would leave a Group that has managers with none. A failed
+     * call may still take effect (see the class note).
+     *
+     * A demotion refuses a metadata plane written by an author who loses that plane's rule with it: carried
+     * forward under the caller's name as for updateGroupRules.
      *
      * @param groupId ID of the Group
      * @param changes the members and the role each takes ("user" or "manager")
@@ -199,8 +220,18 @@ public:
     void setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes);
 
     /**
-     * Changes who may add members, remove members and rewrite the Group's metadata, leaving the rest of the policy
-     * as it is. A signed commit like updateGroupPolicy, under the same rule.
+     * Changes the Group's rules (GroupRules), as a signed commit by a member the current rules allow `changeRules`.
+     *
+     * The rules and the creator are part of the Group's signed state; every member follows the change along the
+     * commit chain. The call is refused for non-members and, before anything is signed, for a member without
+     * `changeRules`. It may be retried internally when another commit lands concurrently. No key, epoch or roster
+     * moves, and neither metadata version moves.
+     *
+     * A narrowing of `editPublicMeta` or `editPrivateMeta` refuses that plane when its author loses the rule: this
+     * call carries such a plane forward under the caller's name, and is refused before signing when the caller itself
+     * would lose that plane's rule while such a plane exists. Until that carry-forward completes (it is retried by
+     * this client's next call on the Group if it fails), `getGroup` returns a non-zero `statusCode` for such a plane,
+     * also to concurrent readers; any write of the plane by a member holding its rule repairs it.
      *
      * @param groupId ID of the Group
      * @param rules the rules to change; an unset one stays as it is
@@ -247,7 +278,7 @@ public:
      * Updates a Group's public (unencrypted) metadata, and nothing else.
      *
      * The three things a Group's metadata used to be updated by one call — public metadata, private metadata
-     * and policies — are three separate calls, each with its own permission on the Bridge. This one cannot
+     * and rules — are three separate calls, each with its own permission on the Bridge. This one cannot
      * touch the other two: the request it sends has no field to carry them in, so the permission bounds what
      * the call can *do*, not merely what it is meant for.
      *
@@ -260,6 +291,8 @@ public:
      * the Group and build the update again. The version checked is `Group::publicMetaVersion` alone, so a
      * concurrent private-metadata write cannot make this one lose.
      *
+     * Allowed by the `editPublicMeta` rule.
+     *
      * @param groupId ID of the Group to update
      * @param publicMeta public (unencrypted) metadata
      * @param version current `publicMetaVersion` of the updated Group
@@ -270,33 +303,13 @@ public:
      * Updates a Group's private (encrypted) metadata, and nothing else.
      *
      * The counterpart of `updateGroupPublicMeta`, with its own permission on the Bridge and its own version
-     * counter: the version checked is `Group::privateMetaVersion` alone.
+     * counter: the version checked is `Group::privateMetaVersion` alone. Allowed by the `editPrivateMeta` rule.
      *
      * @param groupId ID of the Group to update
      * @param privateMeta private (encrypted) metadata
      * @param version current `privateMetaVersion` of the updated Group
      */
     void updateGroupPrivateMeta(const std::string& groupId, const core::Buffer& privateMeta, const int64_t version);
-
-    /**
-     * Sets a Group's policies, as a signed commit by a member the current policy allows `updatePolicy`.
-     *
-     * The rules that govern commits (`update`, `rotateKeys`, `updatePolicy`, `ownerCanBeRemovedFromManagers`) and
-     * the creator are part of the Group's signed state; every member follows the change along the commit chain. The
-     * call is refused for non-members and, before anything is signed, for a member without `updatePolicy`. It may be
-     * retried internally when another commit lands concurrently. No key, epoch or roster moves, and neither metadata
-     * version moves.
-     *
-     * A narrowing of `update` refuses metadata written by an author who loses it: this call carries such a plane
-     * forward under the caller's name, and is refused before signing when the caller itself would lose `update`
-     * while such a plane exists. Until that carry-forward completes (it is retried by this client's next call on the
-     * Group if it fails), `getGroup` returns a non-zero `statusCode` for such a plane, also to concurrent readers;
-     * any metadata write by a member holding `update` repairs it.
-     *
-     * @param groupId ID of the Group to update
-     * @param policies Group's policies
-     */
-    void updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies);
 
     /**
      * Deletes a Group by given Group ID.
@@ -461,6 +474,10 @@ public:
      *
      * The result has a sender, not an author. Check `senderMembership`: anyone in the Context can address an
      * envelope to the caller and name any Group as its origin.
+     *
+     * The recipient Groups are named by the envelope's unsigned header: those this client already holds (read or
+     * pinned) are tried first, and at most 8 others are looked up (a request each). An envelope whose route to the
+     * caller lies past them reads as not addressed to the caller.
      *
      * Throws EnvelopeNotARecipientException when the caller is not among the recipients, and
      * InvalidParamsException for `options.currentEpochOnly`: a recipient has no epoch of the author's Group to hold
@@ -646,7 +663,11 @@ public:
         const DecryptOptions& options,
         const std::optional<core::Buffer>& resumeFrom = std::nullopt
     );
-    /** Items must arrive in order. A skipped one is reported in `missing`; an earlier or repeated one throws. */
+    /**
+     * Items must arrive in order. A skipped one is reported in `missing`; one earlier than, or repeating, the last
+     * one read throws. A mark puts the reader back to its count, also when verifySequenceMark refuses it: items at or
+     * after that count may then arrive (and be returned) again, so a reader de-duplicates by `SequenceItem::index`.
+     */
     SequenceItem readSequenceItem(const SequenceHandle sequence, const core::Buffer& item);
     /**
      * Checks a checkpoint or a close against the items read. Throws `EnvelopeSequenceOrderException` if any
@@ -663,17 +684,43 @@ public:
     // alsoFor wraps a value's key once per recipient, for every value. A Space wraps its key once per recipient
     // when it is created and when the key is replaced; writing a value wraps nothing.
     //
+    // Earlier keys. Only the current key version is wrapped to the recipients. Each new version also seals the
+    // earlier ones it skips to (a key ladder: about two 60-byte rungs a version, whatever the number of recipients),
+    // so whoever holds the current key reads every earlier version: about 2*log2(versions back) requests the first
+    // time, then from memory for the session. Every key so derived is checked against the commitment the Space's
+    // signed statement made for its version. A rung that gives another key is passed by: the reader tries the other
+    // rungs of that version, then its own wrap of that version or of one on the way, and fails with
+    // GroupDataIntegrityException otherwise. Earlier wraps are kept until a manager's rotation prunes them, which it
+    // does only once it has checked every rung since the last prune and added a repair rung where one did not hold.
+    // So once the ladder holds, a recipient reads the whole history, a newcomer included, and a removed one gets no
+    // later key. Bad rungs are repaired at the next manager rotation and the earlier wraps pruned then, except where a
+    // manager filled a span with four bad rungs (the Bridge keeps no more): that blocks pruning, not rotations. Until
+    // the repair a newcomer (who has no earlier wraps) may not reach the versions behind bad rungs. The number of key versions has no ceiling of
+    // its own; the Bridge's rotation rate limit stays.
+    //
+    // With a PinStore set, the device keeps each Space's verified state: the next session checks only the
+    // statements since, and refuses a history served behind it or rewritten under it (GroupHistoryForkException).
+    //
     // A Space has a signed history, like a Group: every change of its recipients or its key is a statement signed
-    // by a recipient and chained to the one before. The Bridge stores the statements and the wrapped keys; who
+    // by a recipient and chained to the one before. The Bridge stores the statements, the wraps and the rungs; who
     // the recipients are, which key is current and who made the Space is what the statements add up to, replayed
     // and checked here. The Bridge cannot add a recipient or plant a key, and neither can a user of the Context
     // who is no recipient: a statement needs a recipient's own signature, or the key of a recipient Group.
+    // A statement carries only what it changes (recipients added, removed, or a recipient Group's key moved to a
+    // later epoch) and a hash of the whole list after it, so its size does not grow with the number of recipients;
+    // the list itself is what the verified statements add up to.
     //
     // A stale key. When a recipient Group removes a member, that member still holds the Space's key. The Bridge
     // marks the Space (SpaceState::keyIsStale), and the next write by someone who can reach every recipient
     // Group's current key makes a new one first. Until then what is written can be read by the removed member,
     // if the application's server gives them the ciphertext. Where that window matters, call rotateSpaceKey
     // right after the removal, or use alsoFor.
+    //
+    // Every writer must see each recipient Group. Each write (encryptInSpace, a file or a sequence written in the
+    // Space) checks every recipient Group's current epoch against the one the Space's key was wrapped to, and a
+    // Group the writer cannot verify counts as moved on: the write tries to replace the key and fails with
+    // SpaceRecipientUnavailableException, even while the key is fresh. In practice a Space's recipient Groups are
+    // visible to the Context (setGroupVisibility) or have every writer among their members.
     //
     // A Space has its own kind of envelope: decrypt() refuses it and decryptInSpace refuses the others
     // (EnvelopeWrongKindException). No outsiders and no alsoFor: to let someone write, make them a recipient.
@@ -685,11 +732,11 @@ public:
 
     /**
      * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,
-     * themselves or through a Group
-     * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. A Space deleted
-     * and created again under the same derived ID by another user starts again at key version 1, below what this
-     * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here, and with a
-     * PinStore on this device after a restart too. Re-created by this process, the earlier Space's pin is let go.
+     * themselves or through a Group. Every writer must be able to see each recipient Group (visible to the Context,
+     * or the writer a member): see the note above.
+     * @param publicMeta, privateMeta at most 64 KiB of content per plane (the Bridge's limit)
+     * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. The ID of a
+     * deleted Space is never taken again: creating under its seed is refused (server::DuplicateResourceIdException).
      * @return the Space's ID
      */
     std::string createSpace(
@@ -714,24 +761,49 @@ public:
     SpaceState getSpace(const std::string& spaceId);
     core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
     void deleteSpace(const std::string& spaceId);
-    /** The current key and every earlier version are wrapped for them: they read what is already there. */
+    /**
+     * The current key is wrapped for them, one wrap each however long the Space's history: they read the earlier
+     * versions down the key ladder, so they read what is already there (see the note above). An added Group every
+     * writer cannot see blocks their writes (see the note above).
+     *
+     * Checked against the Space's verified history before anything is sent. When every recipient named is already
+     * in the Space, in the role and (for a user) with the key given, the call succeeds and does nothing: a retry
+     * after a lost reply cannot be told from this. An empty list, a recipient named twice, a mix of present and
+     * absent recipients, or one present in another role or with another key throws InvalidParamsException.
+     */
     void addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients);
-    /** Makes a new key the removed do not get. @return the new key version */
+    /**
+     * Makes a new key the removed do not get.
+     *
+     * Checked against the Space's verified history before anything is sent. When every recipient named is already
+     * out of the Space, the call succeeds and does nothing (it returns the current key version): a retry after a
+     * lost reply cannot be told from this. An empty list or a mix of present and absent recipients throws
+     * InvalidParamsException, and so does a removal that would leave the Space with no manager: the client refuses
+     * it before sending, so the Bridge's SpaceLastManagerException is not what the caller sees.
+     * @return the new key version (the current one when nothing was removed)
+     */
     int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);
     /**
-     * Makes a new key, wrapped for every recipient's current key. Throws SpaceRecipientUnavailableException
-     * when the caller cannot see a recipient Group's current key.
+     * Makes a new key, wrapped for every recipient's current key, and its rungs to the earlier keys. Throws
+     * SpaceRecipientUnavailableException when the caller cannot see a recipient Group's current key, and
+     * server::SpaceRotationRateLimitException when the Bridge's rotation limit for the Space is reached (its data
+     * says when to retry).
      * @return the new key version
      */
     int64_t rotateSpaceKey(const std::string& spaceId);
+    /** `meta`: at most 64 KiB of content per plane (the Bridge's limit), here and for updateSpacePrivateMeta. */
     void updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
     void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
 
     /**
-     * One symmetric encryption and one signature. When the key is stale, it is replaced first. A caller who may
-     * not replace it (a "user" of the Space outside the Group whose key moved) gets EnvelopeStaleEpochException:
-     * nothing is written under a key a removed member holds. A manager, or a member of that Group, calls
-     * rotateSpaceKey.
+     * One symmetric encryption and one signature. When the key is stale, it is replaced first, by any recipient:
+     * nothing is written under a key a removed member holds. The replacement moves each recipient Group whose epoch
+     * moved to its current key; a reader checks that key against what it can verify of the Group (refusing one
+     * shown wrong), and takes one it cannot verify (a Group hidden from that reader) as the recipient signed it. A
+     * known gap the owner accepted: with a lying Bridge, a member of the Space could so show such a reader a made-up
+     * key for that Group, and a made-up list of recipients signed with it.
+     * A caller who cannot see a recipient Group gets SpaceRecipientUnavailableException, also under a fresh key
+     * (see the note above).
      */
     core::Buffer encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data);
     /** `options.currentEpochOnly` means the Space's current key version. */
@@ -745,6 +817,7 @@ public:
         const std::string& spaceId,
         const std::vector<DecryptItem>& items
     );
+    /** The recipient Groups are checked as by encryptInSpace when the file is finished (finishFileEncryption). */
     FileHandle beginFileEncryptionInSpace(const std::string& spaceId, const Path& location);
     FileHandle beginFileDecryptionInSpace(
         const std::string& spaceId,
@@ -752,6 +825,10 @@ public:
         const core::Buffer& envelope,
         const DecryptOptions& options
     );
+    /**
+     * The recipient Groups are checked as by encryptInSpace here, and again by each item appended: a Group the
+     * writer cannot see ends the sequence (EnvelopeStaleEpochException).
+     */
     SequenceHandle beginSequenceInSpace(const std::string& spaceId, const Path& location, int64_t checkpointEvery = 64);
     SequenceHandle openSequenceInSpace(
         const std::string& spaceId,
@@ -764,7 +841,8 @@ public:
     SpaceOrigin getSpaceSequenceOrigin(const SequenceHandle sequence);
     /**
      * The Space's history: every change of its recipients and its key, verified from the creation. Each
-     * statement is signed by a recipient - themselves, or through a recipient Group, shown by that Group's key.
+     * statement is signed by a recipient - themselves, or through a recipient Group, shown by that Group's key -
+     * and each entry gives what it changed (SpaceLogEntry: added, removed, and refreshed Groups).
      */
     core::PagingList<SpaceLogEntry> getSpaceLog(const std::string& spaceId, const core::PagingQuery& pagingQuery);
 

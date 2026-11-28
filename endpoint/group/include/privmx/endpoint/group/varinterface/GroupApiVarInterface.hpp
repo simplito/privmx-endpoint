@@ -43,7 +43,7 @@ public:
         BuildCustomEventSubscriptionQuery = 23,
         UpdateGroupPublicMeta = 24,
         UpdateGroupPrivateMeta = 25,
-        UpdateGroupPolicy = 26,
+        // 26 was UpdateGroupPolicy (removed, use UpdateGroupRules): reserved, never reused.
         RotateGroupKey = 27,
         RenewLeaf = 28,
         DecryptMany = 29,
@@ -99,6 +99,7 @@ public:
         PinGroupToSubject = 79,
         GetSpaceLog = 80,
         AbortFile = 81,
+        // 82 was CutHistory (removed): reserved, never reused.
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -112,7 +113,6 @@ public:
     Poco::Dynamic::Var renewLeaf(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupPublicMeta(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupPrivateMeta(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var updateGroupPolicy(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listGroups(const Poco::Dynamic::Var& args);

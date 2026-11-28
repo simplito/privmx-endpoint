@@ -172,7 +172,16 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointServerException, "Unknown server except
     X(GroupMetaKeyMismatchException, "Group metadata write must use the current epoch's key", 0x6222)                 \
     X(GroupMetaUnreachableException,                                                                                  \
       "Group metadata entry would become unreadable; rewrite the affected metadata plane first", 0x6223)              \
-    X(GroupRosterVersionMismatchException, "Group roster has moved since this change was planned", 0x6224)
+    X(GroupRosterVersionMismatchException, "Group roster has moved since this change was planned", 0x6224)            \
+    X(GroupLastManagerException, "A Group that has managers keeps at least one", 0x6225)                              \
+    X(SpaceDoesNotExistException, "Space does not exist", 0x6226)                                                     \
+    X(SpaceVersionMismatchException, "Space has moved since this change was planned", 0x6227)                         \
+    X(SpaceKeysInvalidException, "Submitted Space keys are invalid", 0x6228)                                          \
+    X(SpaceLastManagerException, "A Space keeps at least one manager", 0x6229)                                        \
+    X(SpaceStatementInvalidException, "Submitted Space statement is invalid", 0x622A)                                 \
+    X(GroupRulesUnsupportedException, "Group predates group rules and must be recreated", 0x622B)                     \
+    X(SpaceRotationRateLimitException, "Space key rotation rate limit exceeded; retry at the time given", 0x622C)     \
+    X(GroupBatchSizeExceededException, "Too much to read in one batch; read this Group on its own", 0x622D)
 
 #define PRIVMX_SERVER_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, NAME, MSG, CODE)
 SERVER_EXCEPTIONS(PRIVMX_SERVER_DECLARE)

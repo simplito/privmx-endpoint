@@ -1,6 +1,6 @@
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <gtest/gtest.h>
 #include "BaseGroupTest.hpp"
-#include "MemoryPinStore.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <chrono>
 #include <thread>
@@ -19,7 +19,8 @@ using namespace privmx::endpoint::group;
  * Spaces against a running Bridge: one key for several Groups and users, in versions.
  *
  * What a Space must hold to, each a test below: every recipient reads, through its own entry; a value says who
- * wrote it and how they had access; adding a recipient opens the past to them, removing one closes the future;
+ * wrote it and how they had access; adding a recipient opens the past to them (down the key ladder from the current
+ * key, the only one wrapped to them), removing one closes the future;
  * a removal from a recipient Group makes the key stale and the next write replaces it; a Space's envelopes and a
  * Group's never open as each other.
  */
@@ -206,7 +207,7 @@ TEST_F(GroupSpaceTest, an_added_recipient_reads_the_past_and_a_removed_one_gets_
     switchTo(1);
     ASSERT_NO_THROW({ groupApi->addSpaceRecipients(spaceId, {person(3, "user")}); });
     switchTo(3);
-    // Every version was wrapped for the newcomer.
+    // The newcomer got the current key only, and reads the earlier one down the key ladder.
     DecryptedSpaceEnvelope opened = groupApi->decryptInSpace(spaceId, note("n1"), first, by(userId(1)));
     EXPECT_EQ(opened.data.stdString(), "first");
     EXPECT_EQ(opened.origin.via, "user");
@@ -239,6 +240,32 @@ TEST_F(GroupSpaceTest, an_added_recipient_reads_the_past_and_a_removed_one_gets_
     switchTo(1);
     ASSERT_NO_THROW({ groupApi->deleteSpace(spaceId); });
     EXPECT_ANY_THROW({ groupApi->getSpace(spaceId); });
+}
+
+TEST_F(GroupSpaceTest, a_newcomer_reads_every_earlier_version_down_the_key_ladder) {
+    const std::string spaceId = groupApi->createSpace(
+        contextId(), {person(1, "manager"), person(2, "user")}, text("p"), text("q"), std::nullopt
+    );
+    std::vector<core::Buffer> sealed{groupApi->encryptInSpace(spaceId, note("n1"), text("v1"))};
+    // Three rotations, the Bridge's per-minute budget for one user: version 4 carries a skip rung to version 2.
+    for (int version = 2; version <= 4; ++version) {
+        ASSERT_NO_THROW({ EXPECT_EQ(groupApi->rotateSpaceKey(spaceId), version); });
+        sealed.push_back(groupApi->encryptInSpace(spaceId, note("n" + std::to_string(version)), text("v" + std::to_string(version))));
+    }
+    ASSERT_NO_THROW({ groupApi->addSpaceRecipients(spaceId, {person(3, "user")}); });
+
+    switchTo(3);
+    for (int version = 1; version <= 4; ++version) {
+        const DecryptedSpaceEnvelope opened = groupApi->decryptInSpace(
+            spaceId, note("n" + std::to_string(version)), sealed[version - 1], by(userId(1))
+        );
+        EXPECT_EQ(opened.data.stdString(), "v" + std::to_string(version));
+        EXPECT_EQ(opened.origin.keyVersion, version);
+    }
+    EXPECT_EQ(groupApi->getSpace(spaceId).privateMeta.stdString(), "q") << "the metadata of version 1, read the same way";
+
+    switchTo(2);
+    EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), sealed[0], by(userId(1))).data.stdString(), "v1");
 }
 
 TEST_F(GroupSpaceTest, files_and_sequences_in_a_space) {
@@ -466,32 +493,31 @@ TEST_F(GroupSpaceTest, a_reader_who_cannot_see_a_team_follows_its_refresh_throug
     EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
 }
 
-TEST_F(GroupSpaceTest, a_space_this_device_creates_again_under_its_id_is_read_after_a_restart) {
-    // The stored pin of the earlier Space (seq 2) must not hold the one created again (seq 1) behind it.
+TEST_F(GroupSpaceTest, a_writer_who_cannot_see_a_recipient_team_cannot_write_even_under_a_fresh_key) {
+    // Pins a documented limit: every write checks each recipient Group's current epoch, and a members-only Group
+    // has none this writer can verify. The key is fresh, but user 3 cannot tell, so it may not write.
+    const std::string sales = groupApi->createGroup(
+        contextId(), {user(1), user(2)}, {user(1)}, text("public"), text("private"), std::nullopt, std::nullopt, "members"
+    );
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), person(3, "user")}, text(""), text(""));
+    EXPECT_NO_THROW({ groupApi->encryptInSpace(spaceId, note("n1"), text("by a member of sales")); });
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_FALSE(state.keyIsStale);
+    EXPECT_THROW({ groupApi->encryptInSpace(spaceId, note("n2"), text("by user 3")); }, SpaceRecipientUnavailableException);
+    EXPECT_THROW({ groupApi->beginSequenceInSpace(spaceId, note("s1")); }, SpaceRecipientUnavailableException);
+}
+
+TEST_F(GroupSpaceTest, a_deleted_spaces_id_is_never_taken_again) {
+    // The Bridge keeps a deleted Space's id: created again under the same seed, it is refused, so nothing a reader
+    // pinned of the earlier Space ever meets a new one under its id.
     const core::Buffer seed = text("recreated-space");
-    const auto store = std::make_shared<MemoryPinStore>();
-    disconnect();
-    std::string spaceId;
-    {
-        auto session = connect(1);
-        session->setPinStore(store);
-        {
-            auto groups = group::GroupApi::create(*session);
-            spaceId = groups.createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed);
-            ASSERT_NO_THROW({ groups.rotateSpaceKey(spaceId); });
-            groups.deleteSpace(spaceId);
-            EXPECT_EQ(groups.createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed), spaceId);
-        }
-        session->disconnect();
-    }
-    auto session = connect(1);
-    session->setPinStore(store);
-    {
-        auto groups = group::GroupApi::create(*session);
-        SpaceState state;
-        ASSERT_NO_THROW({ state = groups.getSpace(spaceId); });
-        EXPECT_EQ(state.keyVersion, 1);
-    }
-    session->disconnect();
-    connectAs(1);
+    const std::string spaceId = groupApi->createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed);
+    ASSERT_NO_THROW({ groupApi->deleteSpace(spaceId); });
+    EXPECT_THROW(
+        { groupApi->createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed); },
+        privmx::endpoint::server::DuplicateResourceIdException
+    );
 }

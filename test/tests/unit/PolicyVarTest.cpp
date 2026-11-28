@@ -1,7 +1,7 @@
 /*
  * A container policy as a binding hands it over (the Var layer the web and other bindings call through). Every
  * field of the policy must survive it: a rule that is dropped on the way in is a rule the caller believes they set.
- * Found by the browser tests - a Group made with `addMembers: "none"` came back with no such rule.
+ * Found by the browser tests - a rule set on the way in came back missing.
  */
 
 #include <gtest/gtest.h>
@@ -16,7 +16,7 @@ TEST(PolicyVar, EveryFieldOfAContainerPolicySurvivesTheBindingLayer) {
     const auto json = privmx::utils::Utils::parseJsonObject(R"({
         "get": "all", "update": "user", "delete_": "owner", "updatePolicy": "none",
         "updaterCanBeRemovedFromManagers": "no", "ownerCanBeRemovedFromManagers": "yes",
-        "rotateKeys": "manager", "forwardSecrecy": "yes", "addMembers": "user", "removeMembers": "none"
+        "rotateKeys": "manager", "forwardSecrecy": "yes"
     })");
     VarDeserializer deserializer;
     for (const bool withItem : {true, false}) {
@@ -31,7 +31,5 @@ TEST(PolicyVar, EveryFieldOfAContainerPolicySurvivesTheBindingLayer) {
         EXPECT_EQ(policy.ownerCanBeRemovedFromManagers, "yes") << withItem;
         EXPECT_EQ(policy.rotateKeys, "manager") << withItem;
         EXPECT_EQ(policy.forwardSecrecy, "yes") << withItem;
-        EXPECT_EQ(policy.addMembers, "user") << withItem;
-        EXPECT_EQ(policy.removeMembers, "none") << withItem;
     }
 }

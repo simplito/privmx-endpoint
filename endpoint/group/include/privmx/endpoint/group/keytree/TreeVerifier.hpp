@@ -299,11 +299,12 @@ private:
     // dated within it of the bridge's clock, and this clock may be as far behind the bridge's.
     static CommitStatement parseLatest(const server::GroupTreeCommit& wire);
 
-    // The served policy's rules, which `describes` binds to the latest statement. Throws on one that does not parse.
+    // The served rules (the group's `policy` field), which `describes` binds to the latest statement. Throws on one
+    // that does not parse.
     static GroupRules servedRules(const server::GroupInfo& group);
 
     // The latest statement describes exactly what is served: grant key, counters, roster, and the creator and the
-    // four commit rules of the policy (the rest of the policy is the bridge's and is not attested).
+    // rules.
     static bool describes(const CommitStatement& latest, const server::GroupInfo& group);
 
     // The id is `TreeCommits::groupId(contextId, resourceId)`: the only thing that authenticates the served context,

@@ -110,7 +110,7 @@ public:
     // `resolver.resolve` for an epoch below the current one, fetching as little of the ladder as it can: first the
     // canonical descent path (LadderMath::canonicalDescent), then, if a rung on it fails, the ways round the epoch it
     // stopped at (LadderMath::detourSpans), and only then the closed window `[epoch, current]` as before. Every
-    // attempt is verified exactly as one over the whole window; an era boundary or a prune ends it at once.
+    // attempt is verified exactly as one over the whole window; an era boundary ends it at once.
     keytree::ResolveResult resolveDescending(
         keytree::GroupKeyResolver& resolver,
         const VerifiedGroup& group,
@@ -132,14 +132,13 @@ public:
         std::int64_t* epochOut = nullptr
     ) const;
 
-    // The epoch `grantKeyForPubKey` resolved a published group key to; 0 when it has not resolved it.
-    std::int64_t grantEpochOf(const std::string& groupId, const std::string& groupPubKeyBase58) const;
-
     // The sender only ever held a public key, so its epoch is recovered from the group's published history
-    // (`groupGetEpochKeys` by that key) rather than carried on the wire.
+    // (`groupGetEpochKeys` by that key) rather than carried on the wire. `epochOut`: the epoch the key belongs to,
+    // set together with the key.
     privmx::crypto::PrivateKey grantKeyForPubKey(
         const std::string& groupId,
-        const std::string& groupPubKeyBase58
+        const std::string& groupPubKeyBase58,
+        std::int64_t* epochOut = nullptr
     ) const;
 
 private:

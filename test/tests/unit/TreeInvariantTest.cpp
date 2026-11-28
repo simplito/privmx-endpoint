@@ -89,6 +89,9 @@ protected:
     std::map<std::string, TreeVerifier> verifiers;
     // The policy the next `create` signs.
     Poco::Dynamic::Var createPolicy = OPEN_POLICY;
+    // Whether the next `create` makes its creator a manager. Off where the creator is removed: a group that has
+    // managers keeps one, and these groups run under the open rules, where nobody needs to manage.
+    bool creatorManages = true;
 
     void SetUp() override { reset(); }
 
@@ -101,6 +104,7 @@ protected:
         knows.clear();
         verifiers.clear();
         createPolicy = OPEN_POLICY;
+        creatorManages = true;
     }
 
     TreeVerifier::Environment environment() const {
@@ -147,7 +151,9 @@ protected:
         std::vector<std::string> added,
         std::vector<std::string> removed
     ) {
-        std::set<std::string> managers = op == CommitOp::Create ? std::set<std::string>{committer} : bridge.managers;
+        std::set<std::string> managers = op != CommitOp::Create ? bridge.managers :
+            creatorManages                                     ? std::set<std::string>{committer} :
+                                                                 std::set<std::string>{};
         for (const std::string& gone : removed) {
             managers.erase(gone);
         }
@@ -379,7 +385,8 @@ protected:
         // The creator a manager, under the open policy: every member may commit unless a test narrows it.
         bridge.create(
             TreeWire::toCreateTree(plan), plan.grantKey.getPublicKey(), creator,
-            sign(plan, CommitOp::Create, creator, 1, plan.grantKey.getPublicKey(), 1, ids, {}, {}), {creator}
+            sign(plan, CommitOp::Create, creator, 1, plan.grantKey.getPublicKey(), 1, ids, {}, {}),
+            creatorManages ? std::set<std::string>{creator} : std::set<std::string>{}
         );
         learnPlan(creator, plan);
         closeKnowledge();
@@ -493,6 +500,7 @@ protected:
         // Past 32 seats the root is not the only keyed node, past 64 there are keyed nodes off two levels: the
         // creator's and adders' off-path fills, and the closure a removal blanks, only matter there.
         const std::uint32_t size = seed % 3 == 0 ? 1 + pick(32) : seed % 3 == 1 ? 33 + pick(8) : 60 + pick(12);
+        creatorManages = false; // any member may be removed, the creator too
         create(size, pick(size));
         for (std::uint32_t i = 0; i < operations && !HasFatalFailure(); ++i) {
             const std::vector<std::string> members = seatedIn(bridge.state);
@@ -681,6 +689,7 @@ protected:
 
 TEST_F(TreeInvariant, ARemovedCreatorOfAFourSeatGroupLosesTheGrantKey) {
     // A creates {A, B, C, D}; B removes A. See the header for why a removal must blank what the leaver set.
+    creatorManages = false;
     create(4, 0);
     remove(everyone[1].userId, {everyone[0].userId});
     EXPECT_EQ(knows[everyone[0].userId].count(bridge.state.grantPublicKey.toBase58DER()), 0u);
@@ -1019,7 +1028,7 @@ TEST_F(TreeVerification, SECURITY_RefusesARollbackAcrossARotationOrAPolicyCommit
         } else {
             forge(id(0), [](TreeGroupState&) {}, {
                 .op = CommitOp::Policy,
-                .policy = std::optional<Poco::Dynamic::Var>(std::in_place, policyOf({{"update", "user"}}))
+                .policy = std::optional<Poco::Dynamic::Var>(std::in_place, policyOf({}))
             });
         }
         ASSERT_NO_THROW(verify(id(9), false));
@@ -1767,14 +1776,20 @@ std::optional<Poco::Dynamic::Var> wirePolicy(const Poco::Dynamic::Var& policy) {
     return std::optional<Poco::Dynamic::Var>(std::in_place, policy);
 }
 
+// The default rules: every rule the managers' (id(0) is the only manager).
 Poco::Dynamic::Var ownerRules() {
-    return policyOf({{"update", "owner"}, {"updatePolicy", "owner"}});
+    return policyOf({});
+}
+
+// The default rules but the roster's, which every member holds.
+Poco::Dynamic::Var rosterToMembers() {
+    return policyOf({{"addMembers", "members"}, {"removeMembers", "members"}});
 }
 
 } // namespace
 
 TEST_F(TreeVerification, SECURITY_ARemovalByAMemberThePolicyDoesNotAllowIsRefused) {
-    // AC 1: a member without `update` signs a removal, the bridge stores it; every pinned client refuses it.
+    // AC 1: a member without `removeMembers` signs a removal, the bridge stores it; every pinned client refuses it.
     createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
@@ -1788,40 +1803,41 @@ TEST_F(TreeVerification, SECURITY_ARemovalByAMemberThePolicyDoesNotAllowIsRefuse
     EXPECT_THROW(verify(id(9), false), GroupUnauthorizedSignerException);
     EXPECT_EQ(replay(), "unauthorized");
 
-    // The same chain with the owner's earlier policy statement letting every member update: it passes.
+    // The same chain with the manager's earlier rules statement letting every member remove: it passes.
     reset();
     createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
-    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "user"}, {"updatePolicy", "owner"}}))});
+    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(rosterToMembers())});
     remove(id(35), {id(5)});
     EXPECT_NO_THROW(verify(id(9), false));
     EXPECT_EQ(replay(), "");
 }
 
-TEST_F(TreeVerification, SECURITY_APolicyChangeByAMemberWithoutUpdatePolicyIsRefused) {
+TEST_F(TreeVerification, SECURITY_APolicyChangeByAMemberWithoutChangeRulesIsRefused) {
     // Granting itself the role does not help: a policy statement is judged under the rules it replaces.
     createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
-    forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "user"}, {"updatePolicy", "user"}}))});
+    forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(OPEN_POLICY)});
     EXPECT_THROW(verify(id(9), false), GroupUnauthorizedSignerException);
     EXPECT_EQ(replay(), "unauthorized");
 }
 
-TEST_F(TreeVerification, SECURITY_ARuleWithAnEmptyAlternativeAdmitsNobody) {
-    // A malicious bridge stores rotateKeys ",manager", signed by a manager it colludes with; evaluated
-    // fail-open, its empty alternative would admit any member. Hashed by hand: `rules` refuses to build it.
-    createPolicy = Poco::Dynamic::Var();
+TEST_F(TreeVerification, SECURITY_ARuleOutsideTheContractIsRefusedEvenSigned) {
+    // A malicious bridge stores removeMembers ",managers", signed by a manager it colludes with; read fail-open, its
+    // empty alternative would admit any member. Hashed by hand: `rules` refuses to build it.
+    createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
     ASSERT_EQ(bridge.managers.count(id(35)), 0u);
-    std::string preimage = TreeCommits::tag("pmx-group-policy");
-    for (const std::string value : {id(0), std::string("manager"), std::string(",manager"), std::string("manager"), std::string("yes")}) {
-        privmx::endpoint::core::bigendian::putLp(preimage, value);
+    std::string preimage = TreeCommits::tag("pmx-group-rules-v1");
+    privmx::endpoint::core::bigendian::putLp(preimage, id(0));
+    for (const std::string& field : TreeCommits::ruleFields()) {
+        privmx::endpoint::core::bigendian::putLp(preimage, field == "removeMembers" ? ",managers" : "managers");
     }
     const std::string openHash = privmx::crypto::Crypto::sha256(preimage);
-    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policyHash = openHash, .policy = wirePolicy(policyOf({{"rotateKeys", ",manager"}}))});
+    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policyHash = openHash, .policy = wirePolicy(policyOf({{"removeMembers", ",managers"}}))});
     const PublicKey grant = PrivateKey::generateRandom().getPublicKey();
     forge(id(35), [&](TreeGroupState& state) {
         state.epoch += 1;
@@ -1834,7 +1850,7 @@ TEST_F(TreeVerification, SECURITY_ARuleWithAnEmptyAlternativeAdmitsNobody) {
 TEST_F(TreeVerification, SECURITY_ARemovalRelabelledAsSelfUpdateIsRefused) {
     // A selfUpdate needs no role, so it may move nothing but the tree. A plain user's honest-looking removal, signed
     // as a selfUpdate under the default (manager-only) policy.
-    createPolicy = Poco::Dynamic::Var();
+    createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
     remove(id(35), {id(5)});
@@ -1847,7 +1863,7 @@ TEST_F(TreeVerification, SECURITY_ARemovalRelabelledAsSelfUpdateIsRefused) {
 }
 
 TEST_F(TreeVerification, SECURITY_AnEpochOpenedUnderSelfUpdateIsRefused) {
-    createPolicy = Poco::Dynamic::Var();
+    createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
     const PublicKey grant = PrivateKey::generateRandom().getPublicKey();
@@ -1860,18 +1876,18 @@ TEST_F(TreeVerification, SECURITY_AnEpochOpenedUnderSelfUpdateIsRefused) {
 }
 
 TEST_F(TreeVerification, SECURITY_AnAdditionSmuggledIntoAPolicyStatementIsRefused) {
-    // id(35) may change the policy but not the roster; it names mallory in a policy statement.
-    createPolicy = policyOf({{"update", "manager"}, {"updatePolicy", "user"}});
+    // id(35) may change the rules but not the roster; it names mallory in a policy statement.
+    createPolicy = policyOf({{"changeRules", "members"}});
     create(40, 0);
     const std::string mallory = newMember().userId;
     forge(id(35), [](TreeGroupState&) {},
-          {.added = {mallory}, .rosterBump = 1, .op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "manager"}, {"updatePolicy", "user"}}))});
+          {.added = {mallory}, .rosterBump = 1, .op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"changeRules", "members"}}))});
     EXPECT_EQ(replay(), "a policy statement moves no member");
 }
 
-TEST_F(TreeVerification, SECURITY_TheOwnerRemovedInsideAnAddStatementIsRefused) {
-    // The owner guard is reachable only through the remove row.
-    createPolicy = policyOf({{"update", "user"}, {"ownerCanBeRemovedFromManagers", "no"}});
+TEST_F(TreeVerification, SECURITY_AManagerRemovedInsideAnAddStatementIsRefused) {
+    // Removing a manager needs changeRoles, which the remove row checks: an add may remove nobody.
+    createPolicy = policyOf({{"addMembers", "members"}});
     create(40, 0);
     const std::string newcomer = newMember().userId;
     forge(id(35), [](TreeGroupState&) {}, {.added = {newcomer}, .removed = {id(0)}, .rosterBump = 1, .op = CommitOp::Add});
@@ -1879,8 +1895,8 @@ TEST_F(TreeVerification, SECURITY_TheOwnerRemovedInsideAnAddStatementIsRefused) 
 }
 
 TEST_F(TreeVerification, SECURITY_AnAdditionThatPromotesAnExistingMemberIsRefused) {
-    // `update` lets a user add, but not re-add itself as a manager to get the manager-only rules.
-    createPolicy = policyOf({{"update", "user"}, {"updatePolicy", "manager"}});
+    // `addMembers` lets a member add, but not re-add itself as a manager to get the manager-only rules.
+    createPolicy = policyOf({{"addMembers", "members"}});
     create(40, 0);
     forge(id(35), [](TreeGroupState&) {}, {.addedManagers = {id(35)}, .rosterBump = 1});
     EXPECT_EQ(TreeCommits::fromWire(bridge.commits.back()).op, CommitOp::Add);
@@ -1906,7 +1922,7 @@ TEST_F(TreeVerification, SECURITY_AStatementThatChangesThePolicyHashOutsideAPoli
     // The bridge serves the policy this self-update signs, so only the row can tell.
     create(40, 0);
     verify(id(9), false);
-    forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::SelfUpdate, .policy = wirePolicy(policyOf({{"update", "all"}}))});
+    forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::SelfUpdate, .policy = wirePolicy(policyOf({}))});
     EXPECT_EQ(replay(), "a policyHash moved outside a policy statement");
     EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
 }
@@ -1914,7 +1930,7 @@ TEST_F(TreeVerification, SECURITY_AStatementThatChangesThePolicyHashOutsideAPoli
 TEST_F(TreeVerification, SECURITY_APolicyStatementWhoseWirePolicyDoesNotHashToItsPolicyHashIsRefused) {
     create(40, 0);
     verify(id(9), false);
-    const Poco::Dynamic::Var all = policyOf({{"update", "all"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
+    const Poco::Dynamic::Var all = policyOf({});
     forge(id(35), [](TreeGroupState&) {},
           {.op = CommitOp::Policy, .policyHash = TreeCommits::rules(all, id(0)).hash, .policy = wirePolicy(OPEN_POLICY)});
     bridge.policy = all; // what the statement signs, served
@@ -1927,7 +1943,7 @@ TEST_F(TreeVerification, SECURITY_AServedPolicyOtherThanTheLatestStatementSignsI
     remove(id(35), {id(5)});
     const server::GroupInfo honest = bridge.serve(id(9), false);
     const auto lies = std::vector<std::function<void(server::GroupInfo&)>>{
-        [](server::GroupInfo& g) { g.policy = policyOf({{"update", "all"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}}); },
+        [](server::GroupInfo& g) { g.policy = policyOf({}); },
         [](server::GroupInfo& g) { g.policy = Poco::Dynamic::Var(); },
         [&](server::GroupInfo& g) { g.creator = id(9); },
         [](server::GroupInfo& g) { g.policy = Poco::Dynamic::Var("not an object"); },
@@ -1940,13 +1956,13 @@ TEST_F(TreeVerification, SECURITY_AServedPolicyOtherThanTheLatestStatementSignsI
         EXPECT_TRUE(refuses([&] { TreeVerifier().verify(served, TreeVerifier::Scope::Path, environment()); })) << i;
         EXPECT_TRUE(refuses([&] { TreeVerifier().verifyListed(served, environment()); })) << i;
     }
-    // Fields the statements do not sign are the bridge's, and change nothing.
-    server::GroupInfo unsignedFields = honest;
-    Poco::JSON::Object::Ptr wider = policyOf({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}})
-                                        .extract<Poco::JSON::Object::Ptr>();
-    wider->set("get", "all");
-    unsignedFields.policy = wider;
-    EXPECT_NO_THROW(TreeVerifier().verify(unsignedFields, TreeVerifier::Scope::Path, environment()));
+    // A field beside the rules is not the Bridge's to add: the served object is the signed one, exactly.
+    server::GroupInfo extraField = honest;
+    Poco::JSON::Object::Ptr wider = OPEN_POLICY.extract<Poco::JSON::Object::Ptr>();
+    Poco::JSON::Object::Ptr copy = new Poco::JSON::Object(*wider);
+    copy->set("get", "all");
+    extraField.policy = copy;
+    EXPECT_TRUE(refuses([&] { TreeVerifier().verify(extraField, TreeVerifier::Scope::Path, environment()); }));
 }
 
 TEST_F(TreeVerification, SECURITY_EpochOpenersReplayThePolicyFromGenesis) {
@@ -1961,11 +1977,12 @@ TEST_F(TreeVerification, SECURITY_EpochOpenersReplayThePolicyFromGenesis) {
 }
 
 TEST_F(TreeVerification, FollowsAChainWithPolicyChanges) {
-    // The owner lets every member update, a plain member adds under the new rule, the owner narrows it back.
+    // The manager lets every member add and remove, a plain member does under the new rules, the manager narrows them
+    // back.
     createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
-    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "user"}, {"updatePolicy", "owner"}}))});
+    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(rosterToMembers())});
     remove(id(35), {id(5)});
     add(std::string(id(35)), 1);
     forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(ownerRules())});
@@ -1981,7 +1998,7 @@ TEST_F(TreeVerification, AFirstContactTakesThePolicyTheLatestStatementSigns) {
     createPolicy = ownerRules();
     create(40, 0);
     verify(id(9), false);
-    const Poco::Dynamic::Var forged = policyOf({{"update", "all"}, {"updatePolicy", "all"}});
+    const Poco::Dynamic::Var forged = OPEN_POLICY;
     forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::SelfUpdate, .policyHash = TreeCommits::rules(forged, id(0)).hash});
     bridge.policy = forged;
     EXPECT_NO_THROW(TreeVerifier().verify(bridge.serve(id(10), false), TreeVerifier::Scope::Path, environment()));

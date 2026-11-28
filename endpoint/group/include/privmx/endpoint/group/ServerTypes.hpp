@@ -173,7 +173,6 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(treeCommits, std::optional<std::vector<GroupTreeCommit>>)                                                        \
     F(copathHashes, std::optional<std::vector<std::string>>)                                                           \
     F(eraFloor, std::optional<int64_t>)                                                                                \
-    F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
     F(history, std::vector<GroupHistoryEntryInfo>)                                                                     \
     F(visibleTo, std::optional<std::string>)
@@ -268,8 +267,8 @@ JSON_STRUCT(GroupUpdatePublicMetaModel, GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS);
     F(version, int64_t)
 JSON_STRUCT(GroupUpdatePrivateMetaModel, GROUP_UPDATE_PRIVATE_META_MODEL_FIELDS);
 
-// A policy change is a signed commit: the policy travels as `commit.policy`, bound by its `policyHash`, and
-// lands under the same CAS as any commit. It touches neither metadata counter and appends no entry.
+// A rules change (op "policy") is a signed commit: the rules object travels as `commit.policy`, bound by its
+// `policyHash` (the rulesHash), and lands under the same CAS as any commit. It touches neither metadata counter and appends no entry.
 #define GROUP_UPDATE_POLICY_MODEL_FIELDS(F)                                                                            \
     F(id, std::string)                                                                                                 \
     F(commit, GroupTreeCommit)                                                                                         \
@@ -379,6 +378,13 @@ JSON_STRUCT(SpaceKeyRecipient, SPACE_KEY_RECIPIENT_FIELDS);
     F(signature, std::string)
 JSON_STRUCT(SpaceKeyEntry, SPACE_KEY_ENTRY_FIELDS);
 
+// The key of `targetKeyVersion` sealed under the key of `atKeyVersion` (keytree::SpaceLog::sealRung), base64.
+#define SPACE_RUNG_FIELDS(F)                                                                                           \
+    F(atKeyVersion, int64_t)                                                                                           \
+    F(targetKeyVersion, int64_t)                                                                                       \
+    F(data, std::string)
+JSON_STRUCT(SpaceRung, SPACE_RUNG_FIELDS);
+
 // `groupPubKey`: the group's identity key at `groupKeyVersion`, as the Space's statements pin it.
 #define SPACE_GROUP_FIELDS(F)                                                                                          \
     F(groupId, std::string)                                                                                            \
@@ -393,7 +399,15 @@ JSON_STRUCT(SpaceGroup, SPACE_GROUP_FIELDS);
     F(role, std::string)
 JSON_STRUCT(SpaceUser, SPACE_USER_FIELDS);
 
-// One signed statement of a Space's history. Hashes are hex, signatures base64. See keytree/SpaceLog.hpp.
+// A recipient group's key moved to a later epoch (its role stays).
+#define SPACE_GROUP_KEY_FIELDS(F)                                                                                      \
+    F(groupId, std::string)                                                                                            \
+    F(groupKeyVersion, int64_t)                                                                                        \
+    F(groupPubKey, std::string)
+JSON_STRUCT(SpaceGroupKey, SPACE_GROUP_KEY_FIELDS);
+
+// One signed statement of a Space's history: what changed (deltas) and a hash of the whole roster after it. Hashes
+// are hex, signatures base64. See keytree/SpaceLog.hpp.
 #define SPACE_STATEMENT_FIELDS(F)                                                                                      \
     F(spaceId, std::string)                                                                                            \
     F(contextId, std::string)                                                                                          \
@@ -403,8 +417,12 @@ JSON_STRUCT(SpaceUser, SPACE_USER_FIELDS);
     F(date, int64_t)                                                                                                   \
     F(keyVersion, int64_t)                                                                                             \
     F(keyCommit, std::string)                                                                                          \
-    F(groups, std::vector<SpaceGroup>)                                                                                 \
-    F(users, std::vector<SpaceUser>)                                                                                   \
+    F(rosterHash, std::string)                                                                                         \
+    F(addedGroups, std::vector<SpaceGroup>)                                                                            \
+    F(addedUsers, std::vector<SpaceUser>)                                                                              \
+    F(removedGroups, std::vector<std::string>)                                                                         \
+    F(removedUsers, std::vector<std::string>)                                                                          \
+    F(refreshedGroups, std::vector<SpaceGroupKey>)                                                                     \
     F(signer, std::string)                                                                                             \
     F(signerPubKey, std::string)                                                                                       \
     F(via, std::string)                                                                                                \
@@ -438,7 +456,10 @@ JSON_STRUCT(SpaceGetStatementsResult, SPACE_GET_STATEMENTS_RESULT_FIELDS);
     F(publicMeta, Poco::Dynamic::Var)                                                                                  \
     F(privateMeta, Poco::Dynamic::Var)                                                                                 \
     F(publicMetaVersion, int64_t)                                                                                      \
-    F(privateMetaVersion, int64_t)
+    F(privateMetaVersion, int64_t)                                                                                     \
+    F(keysPrunedBelow, std::optional<int64_t>)
+// `keysPrunedBelow`: the version the last honoured prune was made at (0: never). The rungs of the versions after it
+// have not been checked by a pruning manager.
 JSON_STRUCT(SpaceInfo, SPACE_INFO_FIELDS);
 
 #define SPACE_CREATE_MODEL_FIELDS(F)                                                                                   \
@@ -461,6 +482,23 @@ JSON_STRUCT(SpaceIdModel, SPACE_ID_MODEL_FIELDS);
 #define SPACE_GET_RESULT_FIELDS(F) F(space, SpaceInfo)
 JSON_STRUCT(SpaceGetResult, SPACE_GET_RESULT_FIELDS);
 
+// The Space's key ladder, a page at a time by `atKeyVersion` ascending (all rungs of a version together):
+// `nextKeyVersion` is where the next page starts. `keys`: the caller's own entries (its user's and its groups') of the
+// page's versions that still have them - a manager's rotation prunes the earlier versions' entries, anyone else's
+// keeps them, since the Bridge cannot check a rung. An earlier version is read by descending the rungs.
+#define SPACE_GET_KEY_ARCHIVE_MODEL_FIELDS(F)                                                                          \
+    F(id, std::string)                                                                                                 \
+    F(fromKeyVersion, std::optional<int64_t>)                                                                          \
+    F(toKeyVersion, std::optional<int64_t>)                                                                            \
+    F(limit, std::optional<int64_t>)
+JSON_STRUCT(SpaceGetKeyArchiveModel, SPACE_GET_KEY_ARCHIVE_MODEL_FIELDS);
+
+#define SPACE_GET_KEY_ARCHIVE_RESULT_FIELDS(F)                                                                         \
+    F(rungs, std::vector<SpaceRung>)                                                                                   \
+    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(nextKeyVersion, std::optional<int64_t>)
+JSON_STRUCT(SpaceGetKeyArchiveResult, SPACE_GET_KEY_ARCHIVE_RESULT_FIELDS);
+
 #define SPACE_LIST_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(SpaceListModel, core::server::ContainerListModel, SPACE_LIST_MODEL_EXTRA_FIELDS);
 
@@ -481,10 +519,15 @@ JSON_STRUCT(SpaceAddRecipientsModel, SPACE_ADD_RECIPIENTS_MODEL_FIELDS);
     F(id, std::string)                                                                                                 \
     F(keyId, std::string)                                                                                              \
     F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(rungs, std::vector<SpaceRung>)                                                                                   \
+    F(repairRungs, std::optional<std::vector<SpaceRung>>)                                                              \
+    F(prune, std::optional<bool>)                                                                                      \
     F(statement, SpaceStatement)                                                                                       \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(groups, std::optional<std::vector<std::string>>)                                                                 \
     F(users, std::optional<std::vector<std::string>>)
+// `repairRungs` (earlier versions' spans with no rung that opens to the committed key) and `prune` (drop the wraps
+// of the earlier versions) only from a manager's statement; `prune` only once every rung since the last prune checks.
 JSON_STRUCT(SpaceRotateKeyModel, SPACE_ROTATE_KEY_MODEL_FIELDS);
 
 #define SPACE_ROTATE_KEY_RESULT_FIELDS(F) F(keyVersion, int64_t)
@@ -550,18 +593,6 @@ JSON_STRUCT(GroupGetTreeCommitsModel, GROUP_GET_TREE_COMMITS_MODEL_FIELDS);
     F(genesisManagers, std::optional<std::vector<std::string>>)
 JSON_STRUCT(GroupGetTreeCommitsResult, GROUP_GET_TREE_COMMITS_RESULT_FIELDS);
 
-#define GROUP_CUT_ERA_MODEL_FIELDS(F)                                                                                  \
-    F(id, std::string)                                                                                                 \
-    F(newFloor, int64_t)                                                                                               \
-    F(expectedKeyVersion, int64_t)
-JSON_STRUCT(GroupCutEraModel, GROUP_CUT_ERA_MODEL_FIELDS);
-
-#define GROUP_PRUNE_ARCHIVE_MODEL_FIELDS(F)                                                                            \
-    F(id, std::string)                                                                                                 \
-    F(belowEpoch, int64_t)                                                                                             \
-    F(expectedKeyVersion, int64_t)
-JSON_STRUCT(GroupPruneArchiveModel, GROUP_PRUNE_ARCHIVE_MODEL_FIELDS);
-
 // One more rung for a span an epoch already published; the bridge records the caller as its author.
 #define GROUP_REPAIR_RUNG_MODEL_FIELDS(F)                                                                              \
     F(id, std::string)                                                                                                 \
@@ -601,7 +632,6 @@ JSON_STRUCT(GroupGetEpochKeysResult, GROUP_GET_EPOCH_KEYS_RESULT_FIELDS);
 #define GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS(F)                                                                         \
     F(keyVersion, int64_t)                                                                                             \
     F(eraFloor, int64_t)                                                                                               \
-    F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(keyHistory, std::vector<GroupKeyHistoryEntry>)                                                                   \
     F(rungs, std::vector<GroupArchiveRung>)
 JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);

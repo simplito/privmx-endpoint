@@ -105,46 +105,6 @@ const char* TreeCommits::opName(CommitOp op) {
     return "";
 }
 
-std::string TreeCommits::resolved(
-    const Poco::JSON::Object::Ptr& policy,
-    const std::string& field,
-    const char* fallback
-) {
-    const Poco::Dynamic::Var value = policy.isNull() ? Poco::Dynamic::Var() : policy->get(field);
-    if (value.isEmpty()) {
-        return fallback;
-    }
-    if (!value.isString()) {
-        throw std::invalid_argument("policy rule " + field + " is not a string");
-    }
-    const std::string rule = value.convert<std::string>();
-    return rule == "inherit" || rule == "default" ? fallback : rule;
-}
-
-std::string TreeCommits::grammatical(const std::string& field, std::string rule) {
-    if (rule == "none" || rule == "all") {
-        return rule;
-    }
-    std::set<std::string> alternatives;
-    for (const std::string& alternative : privmx::utils::Utils::split(rule, ",")) {
-        std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
-        std::sort(atoms.begin(), atoms.end());
-        const bool known = !atoms.empty() && std::all_of(atoms.begin(), atoms.end(), [](const std::string& atom) {
-            return atom == "user" || atom == "manager" || atom == "owner";
-        });
-        std::string canonical;
-        for (const std::string& atom : atoms) {
-            canonical += atom + "&";
-        }
-        if (!known ||
-            std::adjacent_find(atoms.begin(), atoms.end()) != atoms.end() ||
-            !alternatives.insert(canonical).second) {
-            throw std::invalid_argument("policy rule " + field + " is not a group rule: '" + rule + "'");
-        }
-    }
-    return rule;
-}
-
 bool TreeCommits::onRoster(
     const std::vector<std::string>& users,
     const std::vector<std::string>& managers,
@@ -448,61 +408,51 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
     return statement;
 }
 
+const std::vector<std::string>& TreeCommits::ruleFields() {
+    static const std::vector<std::string> fields{"addMembers",     "removeMembers",  "replaceMemberKeys",
+                                                 "changeRoles",    "changeRules",    "changeVisibility",
+                                                 "editPublicMeta", "editPrivateMeta"};
+    return fields;
+}
+
 GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::string& creator) {
-    Poco::JSON::Object::Ptr object;
-    if (!policy.isEmpty()) {
-        if (policy.type() != typeid(Poco::JSON::Object::Ptr)) {
-            throw std::invalid_argument("a policy is not an object");
+    if (policy.isEmpty() || policy.type() != typeid(Poco::JSON::Object::Ptr)) {
+        throw std::invalid_argument("group rules are not an object");
+    }
+    const Poco::JSON::Object::Ptr object = policy.extract<Poco::JSON::Object::Ptr>();
+    if (object.isNull() || object->size() != ruleFields().size()) {
+        throw std::invalid_argument("group rules hold other fields than the eight rules");
+    }
+    GroupRules result{.creator = creator};
+    std::string preimage = tag("pmx-group-rules-v1");
+    be::putLp(preimage, creator);
+    for (const std::string& field : ruleFields()) {
+        const Poco::Dynamic::Var var = object->get(field);
+        const std::string rule = var.isString() ? var.convert<std::string>() : std::string();
+        if (rule != "managers" && rule != "members" && rule != "nobody") {
+            throw std::invalid_argument("group rule " + field + " is missing or not managers, members or nobody");
         }
-        object = policy.extract<Poco::JSON::Object::Ptr>();
-    }
-    GroupRules result{
-        .creator = creator,
-        .update = grammatical("update", resolved(object, "update", "manager")),
-        .rotateKeys = grammatical("rotateKeys", resolved(object, "rotateKeys", "manager")),
-        .updatePolicy = grammatical("updatePolicy", resolved(object, "updatePolicy", "manager")),
-        .ownerCanBeRemovedFromManagers = resolved(object, "ownerCanBeRemovedFromManagers", "yes"),
-        .hash = {}
-    };
-    // The roster's two rules: "" from `resolved` is an unset one, which follows `update`.
-    const std::string addMembers = resolved(object, "addMembers", "");
-    const std::string removeMembers = resolved(object, "removeMembers", "");
-    result.splitsRoster = !addMembers.empty() || !removeMembers.empty();
-    result.addMembers = addMembers.empty() ? result.update : grammatical("addMembers", addMembers);
-    result.removeMembers = removeMembers.empty() ? result.update : grammatical("removeMembers", removeMembers);
-    if (result.ownerCanBeRemovedFromManagers != "yes" && result.ownerCanBeRemovedFromManagers != "no") {
-        throw std::invalid_argument("policy rule ownerCanBeRemovedFromManagers is neither yes nor no");
-    }
-    std::string preimage = tag("pmx-group-policy");
-    for (const std::string* value :
-         {&result.creator, &result.update, &result.rotateKeys, &result.updatePolicy,
-          &result.ownerCanBeRemovedFromManagers}) {
-        be::putLp(preimage, *value);
-    }
-    if (result.splitsRoster) {
-        be::putLp(preimage, result.addMembers);
-        be::putLp(preimage, result.removeMembers);
+        ruleOf(result, field) = rule;
+        be::putLp(preimage, rule);
     }
     result.hash = privmx::crypto::Crypto::sha256(preimage);
     return result;
 }
 
-bool TreeCommits::allows(const std::string& rule, bool member, bool manager, bool owner) {
-    for (const std::string& alternative : privmx::utils::Utils::split(rule, ",")) {
-        const std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
-        bool all = !atoms.empty(); // fails closed: an empty alternative admits nobody
-        for (const std::string& atom : atoms) {
-            all = all &&
-                (atom == "all" ||
-                 (atom == "user" && member) ||
-                 (atom == "manager" && manager) ||
-                 (atom == "owner" && owner));
-        }
-        if (all) {
-            return true;
-        }
+std::string& TreeCommits::ruleOf(GroupRules& rules, const std::string& field) {
+    std::string* const fields[] = {&rules.addMembers,     &rules.removeMembers,  &rules.replaceMemberKeys,
+                                   &rules.changeRoles,    &rules.changeRules,    &rules.changeVisibility,
+                                   &rules.editPublicMeta, &rules.editPrivateMeta};
+    const auto& names = ruleFields();
+    const auto at = std::find(names.begin(), names.end(), field);
+    if (at == names.end()) {
+        throw std::invalid_argument("no group rule " + field);
     }
-    return false;
+    return *fields[at - names.begin()];
+}
+
+bool TreeCommits::allows(const std::string& rule, bool member, bool manager) {
+    return (rule == "managers" && manager) || (rule == "members" && member);
 }
 
 bool TreeCommits::permits(
@@ -514,36 +464,39 @@ bool TreeCommits::permits(
     const std::string& committer = statement.committer;
     const bool manager = managers.count(committer) != 0;
     const bool member = manager || users.count(committer) != 0;
-    const bool owner = committer == rules.creator;
+    const auto may = [&](const std::string& rule) { return allows(rule, member, manager); };
+    // Of the members a statement names, whether any is on `list` before it.
+    const auto names = [&](const std::vector<std::string>& ids, const std::set<std::string>& list) {
+        return std::any_of(ids.begin(), ids.end(), [&](const std::string& id) { return list.count(id) != 0; });
+    };
+    // A group that has managers keeps at least one.
+    const auto keepsAManager = [&](const std::vector<std::string>& leaving, const std::vector<std::string>& joining) {
+        if (managers.empty() || !joining.empty()) {
+            return true;
+        }
+        return std::any_of(managers.begin(), managers.end(), [&](const std::string& id) {
+            return std::find(leaving.begin(), leaving.end(), id) == leaving.end();
+        });
+    };
     switch (statement.op) {
     case CommitOp::Create:
         return true;
     case CommitOp::Add:
-        // Seating somebody as a manager hands out a role: the roles gate on top of the one for adding.
-        return allows(rules.addMembers, member, manager, owner) &&
-            (statement.addedManagers.empty() || allows(rules.updatePolicy, member, manager, owner));
-    case CommitOp::Remove: {
-        const bool ownerLeavesManagers = managers.count(rules.creator) != 0 &&
-            std::find(statement.removed.begin(), statement.removed.end(), rules.creator) != statement.removed.end();
-        return allows(rules.removeMembers, member, manager, owner) &&
-            (!ownerLeavesManagers || rules.ownerCanBeRemovedFromManagers == "yes");
-    }
+        return may(rules.addMembers) && (statement.addedManagers.empty() || may(rules.changeRoles));
+    case CommitOp::Remove:
+        return may(rules.removeMembers) &&
+            (!names(statement.removed, managers) || may(rules.changeRoles)) &&
+            keepsAManager(statement.removed, {});
     case CommitOp::Reseat:
-        return allows(rules.removeMembers, member, manager, owner);
-    case CommitOp::Roles: {
-        // Whoever may rewrite the rules may hand out roles; the owner leaves the managers under its own rule.
-        const bool ownerLeavesManagers = managers.count(rules.creator) != 0 &&
-            std::find(statement.addedUsers.begin(), statement.addedUsers.end(), rules.creator) !=
-                statement.addedUsers.end();
-        return allows(rules.updatePolicy, member, manager, owner) &&
-            (!ownerLeavesManagers || rules.ownerCanBeRemovedFromManagers == "yes");
-    }
+        return may(rules.replaceMemberKeys);
+    case CommitOp::Roles:
+        // `addedUsers` are the members who end as plain members, `addedManagers` those who end as managers.
+        return may(rules.changeRoles) && keepsAManager(statement.addedUsers, statement.addedManagers);
     case CommitOp::Rotate:
-        return allows(rules.rotateKeys, member, manager, owner);
     case CommitOp::SelfUpdate:
         return member;
     case CommitOp::Policy:
-        return allows(rules.updatePolicy, member, manager, owner);
+        return may(rules.changeRules);
     }
     return false;
 }

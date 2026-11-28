@@ -34,7 +34,9 @@ public:
     // (`ConnectionImpl::localStateScope`). Labels select the MAC key per kind.
     static constexpr const char* GROUP_PINS = "group-pins";
     static constexpr const char* GROUP_PINS_LABEL = "privmx/group/pins";
-    static constexpr std::uint8_t GROUP_PINS_VERSION = 1;
+    // 2: the pin blob's eight group rules. A blob of an earlier version (still authentic under it) holds nothing this
+    // build reads: taken as no pins at all, never as a corrupted slot.
+    static constexpr std::uint8_t GROUP_PINS_VERSION = 2;
 
     // The four values a blob is bound to. They are taken once, together, because sealing and opening under
     // anything but the same four is not an error anywhere — the blob simply opens as nothing.

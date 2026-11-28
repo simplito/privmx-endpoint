@@ -52,30 +52,71 @@ struct GroupRoleChange {
 };
 
 /**
- * Who may change what in a Group, as the Group's signed statements bind it. Each value is a policy entry: "manager",
- * "user", "owner", "all", "none", or alternatives joined with "," ("manager,owner").
+ * Who may do what in a Group, as the Group's signed statements bind it. Every rule is "managers", "members" or
+ * "nobody", and defaults to "managers". An operation needs every rule it touches: adding a manager needs `addMembers`
+ * and `changeRoles`, removing one `removeMembers` and `changeRoles`. Fixed, with no rule: any member
+ * may rotate the Group key (GroupApi::rotateGroupKey) and renew its own leaf; nobody removes themselves (another
+ * member removes them); a Group that has managers keeps at least one; deleting a Group is the managers'. The
+ * creator holds no privilege of its own.
  */
 struct GroupRules {
     /** Who may add members. */
     std::string addMembers;
-    /** Who may remove members or replace their keys. */
+    /** Who may remove members. */
     std::string removeMembers;
-    /** Who may rewrite the Group's metadata (the policy's `update`). */
-    std::string updateMeta;
+    /** Who may replace members' keys (GroupApi::replaceGroupMemberKeys). */
+    std::string replaceMemberKeys;
+    /** Who may grant or revoke the manager role. */
+    std::string changeRoles;
+    /** Who may change these rules (GroupApi::updateGroupRules). */
+    std::string changeRules;
+    /** Who may set the Group's visibility (GroupApi::setGroupVisibility). The visibility itself is not signed. */
+    std::string changeVisibility;
+    /** Who may rewrite the Group's public metadata. */
+    std::string editPublicMeta;
+    /** Who may rewrite the Group's private metadata. */
+    std::string editPrivateMeta;
+
+    /** Whether nobody may change the membership, the roles or these rules (GroupRulesUpdate::createImmutable). */
+    bool isImmutable() const {
+        return addMembers == "nobody" &&
+            removeMembers == "nobody" &&
+            changeRoles == "nobody" &&
+            changeRules == "nobody";
+    }
 };
 
-/** The rules GroupApi::updateGroupRules changes; an unset one stays as it is. */
+/** Rules for GroupApi::createGroup and GroupApi::updateGroupRules; an unset one keeps its default or current value. */
 struct GroupRulesUpdate {
     std::optional<std::string> addMembers;
     std::optional<std::string> removeMembers;
-    std::optional<std::string> updateMeta;
+    std::optional<std::string> replaceMemberKeys;
+    std::optional<std::string> changeRoles;
+    std::optional<std::string> changeRules;
+    std::optional<std::string> changeVisibility;
+    std::optional<std::string> editPublicMeta;
+    std::optional<std::string> editPrivateMeta;
+
+    /**
+     * The immutable preset, for GroupApi::createGroup: nobody adds or removes members, changes roles or changes the
+     * rules. The others stay at their defaults; `replaceMemberKeys` stays the managers', so a member's leaked device
+     * can still be locked out.
+     */
+    static GroupRulesUpdate createImmutable() {
+        GroupRulesUpdate rules;
+        rules.addMembers = rules.removeMembers = rules.changeRoles = rules.changeRules = "nobody";
+        return rules;
+    }
 };
 
 /** One signed statement of a Group's history, as GroupApi::getGroupLog returns it. */
 struct GroupLogEntry {
     /** 1 for the creation, one more for each later statement. */
     int64_t seq;
-    /** "create", "add", "remove", "reseat" (a member's key replaced, see GroupApi::replaceGroupMemberKeys), "roles", "rotate", "policy" or "selfUpdate". */
+    /**
+     * "create", "add", "remove", "reseat" (a member's key replaced, see GroupApi::replaceGroupMemberKeys), "roles",
+     * "rotate", "policy" (a change of the Group's rules) or "selfUpdate".
+     */
     std::string kind;
     /** The member who signed it, and the identity key it was signed with. */
     std::string author;
@@ -165,14 +206,6 @@ struct Group {
     core::Buffer privateMeta;
 
     /**
-     * Group's policies. Only `update`, `rotateKeys`, `updatePolicy` and `ownerCanBeRemovedFromManagers` (and the
-     * creator) are signed into the Group's state; there `inherit`/`default` mean the built-in defaults (manager,
-     * manager, manager, yes), not the Context's; the Context can only deny further. Every other field is the
-     * Bridge's word.
-     */
-    core::ContainerPolicy policy;
-
-    /**
      * status code of retrieval and verification of the Group (0 = success)
      */
     int64_t statusCode;
@@ -201,7 +234,7 @@ struct Group {
     std::string visibleTo;
 
     /**
-     * the Group's signed rules, resolved (GroupRules). Empty strings when the policy served does not parse
+     * the Group's signed rules (GroupRules). Empty strings when the rules served do not parse
      */
     GroupRules rules;
 };
@@ -272,9 +305,10 @@ struct GroupSummary {
     int64_t rosterVersion;
 
     /**
-     * Group's policies
+     * Group's rules as the listing serves them, unverified (a listing carries no signed statement). Empty strings
+     * when they do not parse
      */
-    core::ContainerPolicy policy;
+    GroupRules rules;
 
     /**
      * Optional type tag
@@ -382,7 +416,7 @@ struct GroupErrorDetails {
     /** The user and key in question: who really signed, or whose key the UserVerifier refused. */
     std::string userId;
     std::string pubKey;
-    /** On a wrong kind of envelope: what it is - "member", "outsider", "anonymous" or "shared". */
+    /** On a wrong kind of envelope: what it is - "member", "outsider", "anonymous" or "space". */
     std::string envelopeKind;
 };
 
@@ -465,7 +499,7 @@ struct GroupPublicKey {
     std::string pubKey;
     /**
      * Who created the Group. The Bridge's field, held to the Group's latest signed statement: the creator is
-     * part of the policy every statement signs.
+     * part of the rules every statement signs.
      */
     std::string creator;
 };
@@ -620,7 +654,12 @@ struct SpaceState {
      * this key. The next write by anyone who can reach every recipient Group's key replaces it.
      */
     bool keyIsStale;
+    /** The Bridge's word: unsigned and unencrypted, anyone the Bridge lets write it may have. */
     core::Buffer publicMeta;
+    /**
+     * Encrypted under the Space's key and signed by its writer, who the UserVerifier vouches for. Any recipient
+     * holding the key may have written it, not only a manager.
+     */
     core::Buffer privateMeta;
     int64_t publicMetaVersion;
     int64_t privateMetaVersion;
@@ -656,10 +695,19 @@ struct SpaceLogEntry {
     int64_t date;
     /** The version of the Space's key after it. */
     int64_t keyVersion;
+    /**
+     * What it changed: a statement carries only these deltas (and a hash of the whole roster after it), never the
+     * full list of recipients. Added and removed recipients by ID; a creation adds every first recipient.
+     */
     std::vector<std::string> addedGroups;
     std::vector<std::string> addedUsers;
     std::vector<std::string> removedGroups;
     std::vector<std::string> removedUsers;
+    /**
+     * Recipient Groups whose key moved to a later epoch (any epoch advance of the Group: a member removed, a key
+     * rotation, a member's key replaced): the epoch now.
+     */
+    std::vector<SpaceGroupRecipient> refreshedGroups;
 };
 
 struct DecryptedSpaceEnvelope {

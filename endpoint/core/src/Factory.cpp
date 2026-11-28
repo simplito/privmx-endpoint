@@ -43,12 +43,6 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.forwardSecrecy.has_value()) {
         model->set("forwardSecrecy", policy.forwardSecrecy.value());
     }
-    if (policy.addMembers.has_value()) {
-        model->set("addMembers", policy.addMembers.value());
-    }
-    if (policy.removeMembers.has_value()) {
-        model->set("removeMembers", policy.removeMembers.value());
-    }
     if (policy.item.has_value()) {
         Poco::JSON::Object::Ptr itemModel = new Poco::JSON::Object();
         auto itemPolicy = policy.item.value();
@@ -104,12 +98,6 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.forwardSecrecy.has_value()) {
         model->set("forwardSecrecy", policy.forwardSecrecy.value());
     }
-    if (policy.addMembers.has_value()) {
-        model->set("addMembers", policy.addMembers.value());
-    }
-    if (policy.removeMembers.has_value()) {
-        model->set("removeMembers", policy.removeMembers.value());
-    }
     return model;
 }
 
@@ -131,8 +119,6 @@ ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var& serve
     );
     result.rotateKeys = Factory::getValueOrNullopt<std::string>(obj, "rotateKeys");
     result.forwardSecrecy = Factory::getValueOrNullopt<std::string>(obj, "forwardSecrecy");
-    result.addMembers = Factory::getValueOrNullopt<std::string>(obj, "addMembers");
-    result.removeMembers = Factory::getValueOrNullopt<std::string>(obj, "removeMembers");
 
     if (obj->isObject("item")) {
         auto itemObj = obj->getObject("item");
@@ -165,7 +151,5 @@ ContainerPolicyWithoutItem Factory::parsePolicyServerObjectWithoutItem(const Poc
         obj, "ownerCanBeRemovedFromManagers"
     );
     result.forwardSecrecy = Factory::getValueOrNullopt<std::string>(obj, "forwardSecrecy");
-    result.addMembers = Factory::getValueOrNullopt<std::string>(obj, "addMembers");
-    result.removeMembers = Factory::getValueOrNullopt<std::string>(obj, "removeMembers");
     return result;
 }

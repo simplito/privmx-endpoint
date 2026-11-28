@@ -128,6 +128,10 @@ server::SpaceGetResult ServerApi::spaceGet(server::SpaceIdModel model) {
     return request<server::SpaceGetResult>("spaceGet", model.toJSON());
 }
 
+server::SpaceGetKeyArchiveResult ServerApi::spaceGetKeyArchive(server::SpaceGetKeyArchiveModel model) {
+    return request<server::SpaceGetKeyArchiveResult>("spaceGetKeyArchive", model.toJSON());
+}
+
 server::SpaceListResult ServerApi::spaceList(server::SpaceListModel model) {
     return request<server::SpaceListResult>("spaceList", model.toJSON());
 }
@@ -167,14 +171,6 @@ void ServerApi::groupGenerateNewKey(server::GroupGenerateNewKeyModel model) {
 
 server::GroupGetTreeCommitsResult ServerApi::groupGetTreeCommits(server::GroupGetTreeCommitsModel model) {
     return request<server::GroupGetTreeCommitsResult>("groupGetTreeCommits", model.toJSON());
-}
-
-void ServerApi::groupCutEra(server::GroupCutEraModel model) {
-    request("groupCutEra", model.toJSON());
-}
-
-void ServerApi::groupPruneArchive(server::GroupPruneArchiveModel model) {
-    request("groupPruneArchive", model.toJSON());
 }
 
 server::GroupGetKeyArchiveResult ServerApi::groupGetKeyArchive(server::GroupGetKeyArchiveModel model) {

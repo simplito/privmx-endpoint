@@ -63,8 +63,9 @@ struct GroupChangedEventData {
     int64_t keyVersion;
 
     /**
-     * Which operation changed the Group: "created", "publicMetaUpdated", "privateMetaUpdated",
-     * "policyUpdated", "keyRotated", "memberAdded", "memberRemoved", "eraCut" or "archivePruned"
+     * Which operation changed the Group: "created", "publicMetaUpdated", "privateMetaUpdated", "policyUpdated" (the
+     * rules), "keyRotated", "memberAdded", "memberRemoved", "membersReseated", "rolesChanged", "visibilityChanged" or
+     * "eraCut" (history abandoned: the era floor raised)
      */
     std::string changeKind;
 };

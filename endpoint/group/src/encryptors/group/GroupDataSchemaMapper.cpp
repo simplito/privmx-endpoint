@@ -22,6 +22,7 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
 void GroupDataSchemaMapper::assertWrittenByMember(
+    bool publicPlane,
     const server::GroupInfo& groupInfo,
     const server::GroupMetaEntry& entry,
     const server::GroupMetaEntry* readBefore,
@@ -41,7 +42,7 @@ void GroupDataSchemaMapper::assertWrittenByMember(
     if (key.error ||
         !member ||
         !keytree::TreeCommits::onRoster(users, managers, key.dio.creatorUserId) ||
-        !keytree::TreeCommits::allows(rules.update, true, manager, author == rules.creator)) {
+        !keytree::TreeCommits::allows(editRule(rules, publicPlane), true, manager)) {
         throw GroupMembershipMismatchException();
     }
 }
@@ -175,7 +176,7 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     const std::optional<PriorRole>& prior
 ) {
     assertWrittenByMember(
-        groupInfo, groupInfo.publicMeta, prior.has_value() ? &prior->publicMeta : nullptr, publicMetaKey, prior
+        true, groupInfo, groupInfo.publicMeta, prior.has_value() ? &prior->publicMeta : nullptr, publicMetaKey, prior
     );
     dynamic::EncryptedGroupPublicMetaV5 encData;
     try {
@@ -226,7 +227,8 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     const std::optional<PriorRole>& prior
 ) {
     assertWrittenByMember(
-        groupInfo, groupInfo.privateMeta, prior.has_value() ? &prior->privateMeta : nullptr, privateMetaKey, prior
+        false, groupInfo, groupInfo.privateMeta, prior.has_value() ? &prior->privateMeta : nullptr, privateMetaKey,
+        prior
     );
     dynamic::EncryptedGroupPrivateMetaV5 encData;
     try {
@@ -284,6 +286,22 @@ dynamic::MembershipBlock GroupDataSchemaMapper::buildMembershipBlock(
         .keyVersion = keyVersion,
         .rosterVersion = rosterVersion
     };
+}
+
+GroupRules GroupDataSchemaMapper::toLibRules(const Poco::Dynamic::Var& policy, const std::string& creator) {
+    try {
+        const keytree::GroupRules rules = keytree::TreeCommits::rules(policy, creator);
+        return GroupRules{
+            .addMembers = rules.addMembers,
+            .removeMembers = rules.removeMembers,
+            .replaceMemberKeys = rules.replaceMemberKeys,
+            .changeRoles = rules.changeRoles,
+            .changeRules = rules.changeRules,
+            .changeVisibility = rules.changeVisibility,
+            .editPublicMeta = rules.editPublicMeta,
+            .editPrivateMeta = rules.editPrivateMeta
+        };
+    } catch (const std::invalid_argument&) { return GroupRules{}; }
 }
 
 keytree::GroupRules GroupDataSchemaMapper::rulesOf(const server::GroupInfo& group) {
@@ -451,17 +469,6 @@ Group GroupDataSchemaMapper::toLibGroup(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
-    // The rules as the statements sign them. A policy outside the group grammar leaves them empty: the status code
-    // already says the group did not verify.
-    GroupRules rules;
-    try {
-        const keytree::GroupRules signedRules = keytree::TreeCommits::rules(info.policy, info.creator);
-        rules = GroupRules{
-            .addMembers = signedRules.addMembers,
-            .removeMembers = signedRules.removeMembers,
-            .updateMeta = signedRules.update
-        };
-    } catch (const std::invalid_argument&) {}
     return Group{
         .contextId = info.contextId,
         .groupId = info.id,
@@ -477,13 +484,12 @@ Group GroupDataSchemaMapper::toLibGroup(
         .rosterVersion = info.rosterVersion,
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
         .type = info.type,
         .keyVersion = info.keyVersion,
         .visibleTo = info.visibleTo.value_or("members"),
-        .rules = rules
+        .rules = toLibRules(info.policy, info.creator)
     };
 }
 
@@ -499,7 +505,7 @@ GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary
         .publicMetaVersion = info.publicMetaVersion,
         .privateMetaVersion = info.privateMetaVersion,
         .rosterVersion = info.rosterVersion,
-        .policy = core::Factory::parsePolicyServerObject(info.policy),
+        .rules = toLibRules(info.policy, info.creator),
         .type = info.type,
         .keyVersion = info.keyVersion,
         .visibleTo = info.visibleTo.value_or("members")

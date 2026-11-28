@@ -44,6 +44,7 @@ public:
 
     server::SpaceCreateResult spaceCreate(server::SpaceCreateModel model);
     server::SpaceGetResult spaceGet(server::SpaceIdModel model);
+    server::SpaceGetKeyArchiveResult spaceGetKeyArchive(server::SpaceGetKeyArchiveModel model);
     server::SpaceListResult spaceList(server::SpaceListModel model);
     void spaceDelete(server::SpaceIdModel model);
     server::SpaceGetStatementsResult spaceGetStatements(server::SpaceGetStatementsModel model);
@@ -55,8 +56,6 @@ public:
     void groupSelfUpdate(server::GroupSelfUpdateModel model);
     void groupGenerateNewKey(server::GroupGenerateNewKeyModel model);
     server::GroupGetTreeCommitsResult groupGetTreeCommits(server::GroupGetTreeCommitsModel model);
-    void groupCutEra(server::GroupCutEraModel model);
-    void groupPruneArchive(server::GroupPruneArchiveModel model);
     // The Epoch Ladder, fetched only when a client is actually reaching for an older epoch.
     server::GroupGetKeyArchiveResult groupGetKeyArchive(server::GroupGetKeyArchiveModel model);
     // Past epochs' key entries and grant keys, looked up by keyId or grant key.

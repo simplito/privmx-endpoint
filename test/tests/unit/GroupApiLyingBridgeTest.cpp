@@ -68,18 +68,36 @@ namespace {
 
 const std::string CONTEXT = "ctx-lying";
 
-// A policy as the API takes it.
-core::ContainerPolicy policyWith(const std::map<std::string, std::string>& rules) {
-    core::ContainerPolicy policy;
+// Rules as the API takes them: those given set, the rest left to their defaults (or as they are).
+GroupRulesUpdate policyWith(const std::map<std::string, std::string>& rules) {
+    GroupRulesUpdate update;
+    using Field = std::optional<std::string> GroupRulesUpdate::*;
+    static const std::map<std::string, Field> fields{
+        {"addMembers", &GroupRulesUpdate::addMembers},
+        {"removeMembers", &GroupRulesUpdate::removeMembers},
+        {"replaceMemberKeys", &GroupRulesUpdate::replaceMemberKeys},
+        {"changeRoles", &GroupRulesUpdate::changeRoles},
+        {"changeRules", &GroupRulesUpdate::changeRules},
+        {"changeVisibility", &GroupRulesUpdate::changeVisibility},
+        {"editPublicMeta", &GroupRulesUpdate::editPublicMeta},
+        {"editPrivateMeta", &GroupRulesUpdate::editPrivateMeta},
+    };
     for (const auto& [field, rule] : rules) {
-        (field == "update" ? policy.update : field == "rotateKeys" ? policy.rotateKeys :
-         field == "updatePolicy" ? policy.updatePolicy : policy.ownerCanBeRemovedFromManagers) = rule;
+        update.*fields.at(field) = rule;
     }
-    return policy;
+    return update;
 }
 
-// OPEN_POLICY as the API takes it.
-const core::ContainerPolicy OPEN = policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
+// OPEN_POLICY as the API takes it: every rule "members".
+const GroupRulesUpdate OPEN = [] {
+    std::map<std::string, std::string> all;
+    for (const std::string& field : TreeCommits::ruleFields()) {
+        all[field] = "members";
+    }
+    return policyWith(all);
+}();
+// Narrows both metadata rules to the managers.
+const GroupRulesUpdate METADATA_TO_MANAGERS = policyWith({{"editPublicMeta", "managers"}, {"editPrivateMeta", "managers"}});
 
 srv::GroupArchiveInvalidException archiveInvalid() {
     return srv::GroupArchiveInvalidException();
@@ -122,6 +140,7 @@ struct Bridge {
     // Edits what any `groupGet` serves `caller`.
     std::function<void(const std::string&, server::GroupInfo&)> onRead = [](const std::string&, server::GroupInfo&) {};
     std::function<void()> onMetaWrite = [] {}; // before a metadata write is stored; throws to refuse
+    std::function<void()> onSetVisibility = [] {}; // before a visibility change is stored; throws to refuse
     std::shared_ptr<std::atomic<int>> verifierCalls = std::make_shared<std::atomic<int>>(0);
     std::function<void()> onVerify = [] {}; // runs inside every UserVerifier call, on the caller's thread
     struct Call {
@@ -145,6 +164,22 @@ struct Bridge {
     // Edits what `groupGetKeyArchive` serves for an ask.
     std::function<void(const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&)> onArchive =
         [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
+    // Spaces, as stored: key entries (earlier versions' pruned by a manager's rotation), every version's rungs, and
+    // the statements; served as the Bridge serves them (`spaceGet` the current entries, `spaceGetKeyArchive` the
+    // rungs and the caller's own entries, at most `spaceKeysPage` versions a page). A rotation must carry exactly the canonical rungs, an addition only current-version entries.
+    struct StoredSpace {
+        server::SpaceInfo info;
+        std::vector<server::SpaceKeyEntry> keys;
+        std::vector<server::SpaceRung> rungs;
+        std::vector<server::SpaceStatement> statements;
+    };
+    // Edits a rotation as it arrives (`caller`, the request), before it is checked and stored.
+    std::function<void(const std::string&, server::SpaceRotateKeyModel&)> onSpaceRotate =
+        [](const std::string&, server::SpaceRotateKeyModel&) {};
+    // Edits what `spaceGetKeyArchive` serves.
+    std::function<void(server::SpaceGetKeyArchiveResult&)> onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) {};
+    std::map<std::string, StoredSpace> spaces;
+    std::int64_t spaceKeysPage = 256;
     // Requests a test may make before a client is taken to loop on the bridge: failed, not hung.
     static constexpr std::size_t MAX_CALLS = 20000;
 
@@ -152,6 +187,202 @@ struct Bridge {
         return static_cast<std::size_t>(std::count_if(calls.begin(), calls.end(), [&](const Call& call) {
             return call.caller == caller && call.method == method;
         }));
+    }
+
+    // The new state of a stored Space after a statement: its deltas applied to the stored recipients, which must
+    // hash to the statement's rosterHash (as the Bridge refuses SPACE_STATEMENT_INVALID), its version and position.
+    static void applyStatement(StoredSpace& space, const server::SpaceStatement& statement, const std::string& caller) {
+        auto groups = space.info.groups;
+        auto users = space.info.users;
+        for (const auto& id : statement.removedGroups) {
+            groups.erase(
+                std::remove_if(groups.begin(), groups.end(), [&](const auto& g) { return g.groupId == id; }), groups.end()
+            );
+        }
+        for (const auto& id : statement.removedUsers) {
+            users.erase(std::remove_if(users.begin(), users.end(), [&](const auto& u) { return u.userId == id; }), users.end());
+        }
+        for (const auto& refresh : statement.refreshedGroups) {
+            for (auto& g : groups) {
+                if (g.groupId == refresh.groupId) {
+                    g.groupKeyVersion = refresh.groupKeyVersion;
+                    g.groupPubKey = refresh.groupPubKey;
+                }
+            }
+        }
+        groups.insert(groups.end(), statement.addedGroups.begin(), statement.addedGroups.end());
+        users.insert(users.end(), statement.addedUsers.begin(), statement.addedUsers.end());
+        std::vector<SpaceLogGroup> rosterGroups;
+        for (const auto& g : groups) {
+            rosterGroups.push_back(SpaceLogGroup{
+                .groupId = g.groupId,
+                .role = g.role,
+                .groupKeyVersion = static_cast<std::uint64_t>(g.groupKeyVersion),
+                .groupPubKey = g.groupPubKey.value_or(""),
+            });
+        }
+        std::vector<SpaceLogUser> rosterUsers;
+        for (const auto& u : users) {
+            rosterUsers.push_back(SpaceLogUser{.userId = u.userId, .pubKey = u.pubKey, .role = u.role});
+        }
+        if (privmx::utils::Hex::from(SpaceLog::rosterHash(rosterGroups, rosterUsers)) != statement.rosterHash) {
+            throw std::runtime_error("SPACE_STATEMENT_INVALID");
+        }
+        space.statements.push_back(statement);
+        space.info.seq = statement.seq;
+        space.info.keyVersion = statement.keyVersion;
+        space.info.groups = groups;
+        space.info.users = users;
+        space.info.lastModifier = caller;
+    }
+
+    Poco::Dynamic::Var answerSpace(const std::string& caller, const std::string& method, Poco::JSON::Object::Ptr params) {
+        if (method == "spaceCreate") {
+            const auto model = server::SpaceCreateModel::fromJSON(params);
+            const std::string id = TreeCommits::spaceId(model.contextId, model.resourceId);
+            StoredSpace& space = spaces[id];
+            space.info.id = id;
+            space.info.contextId = model.contextId;
+            space.info.creator = caller;
+            space.info.keyId = model.keyId;
+            space.info.keyIsStale = false;
+            space.info.publicMeta = model.publicMeta;
+            space.info.privateMeta = model.privateMeta;
+            space.info.publicMetaVersion = 1;
+            space.info.privateMetaVersion = 1;
+            space.info.keysPrunedBelow = 0;
+            space.keys = model.keys;
+            applyStatement(space, model.statement, caller);
+            return server::SpaceCreateResult{.spaceId = id}.toJSON();
+        }
+        const std::string id = params->getValue<std::string>("id");
+        if (spaces.count(id) == 0) {
+            bridgeError<srv::SpaceDoesNotExistException>();
+        }
+        StoredSpace& space = spaces.at(id);
+        if (method == "spaceGet") {
+            server::SpaceInfo info = space.info;
+            info.keys.clear();
+            for (const auto& entry : space.keys) {
+                if (entry.keyVersion == info.keyVersion) {
+                    info.keys.push_back(entry);
+                }
+            }
+            return server::SpaceGetResult{.space = info}.toJSON();
+        }
+        if (method == "spaceGetKeyArchive") {
+            const auto model = server::SpaceGetKeyArchiveModel::fromJSON(params);
+            const std::int64_t from = model.fromKeyVersion.value_or(1);
+            const std::int64_t to = std::min(model.toKeyVersion.value_or(INT64_MAX), space.info.keyVersion);
+            const std::int64_t limit = std::min(model.limit.value_or(256), spaceKeysPage);
+            server::SpaceGetKeyArchiveResult result;
+            std::int64_t version = from;
+            for (; version <= to && version < from + limit; ++version) {
+                for (const auto& rung : space.rungs) {
+                    if (rung.atKeyVersion == version) {
+                        result.rungs.push_back(rung);
+                    }
+                }
+            }
+            if (version <= to) {
+                result.nextKeyVersion = version;
+            }
+            for (const auto& entry : space.keys) {
+                // The caller's own (this fake serves every group's: the client opens only those it holds).
+                if (entry.keyVersion >= from && entry.keyVersion < version &&
+                    (entry.recipient.groupId.has_value() || entry.recipient.userId.value_or("") == caller)) {
+                    result.keys.push_back(entry);
+                }
+            }
+            onSpaceArchive(result);
+            return result.toJSON();
+        }
+        if (method == "spaceGetStatements") {
+            const auto model = server::SpaceGetStatementsModel::fromJSON(params);
+            server::SpaceGetStatementsResult result;
+            for (std::int64_t i = model.fromSeq; i < model.fromSeq + model.limit &&
+                 i < static_cast<std::int64_t>(space.statements.size());
+                 ++i) {
+                result.statements.push_back(space.statements[static_cast<std::size_t>(i)]);
+            }
+            return result.toJSON();
+        }
+        if (method == "spaceRotateKey" || method == "spaceRemoveRecipients") {
+            auto model = server::SpaceRotateKeyModel::fromJSON(params);
+            onSpaceRotate(caller, model);
+            const std::int64_t next = space.info.keyVersion + 1;
+            std::vector<RungSpan> spans;
+            for (const auto& rung : model.rungs) {
+                spans.push_back(RungSpan{
+                    static_cast<std::uint32_t>(rung.atKeyVersion), static_cast<std::uint32_t>(rung.targetKeyVersion)
+                });
+            }
+            const auto repairs = model.repairRungs.value_or(std::vector<server::SpaceRung>{});
+            if (!LadderMath::validateRungSet(spans, static_cast<std::uint32_t>(next), 1).ok ||
+                spans.size() != LadderMath::rungSpansFor(static_cast<std::uint32_t>(next), 1).size() ||
+                spans.size() + repairs.size() > 64 ||
+                std::any_of(model.keys.begin(), model.keys.end(), [&](const auto& e) { return e.keyVersion != next; })) {
+                throw std::runtime_error("SPACE_KEYS_INVALID");
+            }
+            // A Space rung is exactly iv(12) || ciphertext(32) || tag(16); a span keeps at most four.
+            for (const auto* list : std::initializer_list<const std::vector<server::SpaceRung>*>{&model.rungs, &repairs}) {
+                for (const auto& rung : *list) {
+                    if (privmx::utils::Base64::toString(rung.data).size() != 60) {
+                        throw std::runtime_error("SPACE_KEYS_INVALID");
+                    }
+                }
+            }
+            for (const auto& repair : repairs) {
+                if (std::count_if(space.rungs.begin(), space.rungs.end(), [&](const auto& r) {
+                        return r.atKeyVersion == repair.atKeyVersion && r.targetKeyVersion == repair.targetKeyVersion;
+                    }) >= 4) {
+                    throw std::runtime_error("SPACE_KEYS_INVALID");
+                }
+            }
+            for (const auto& repair : repairs) {
+                const auto owed = LadderMath::rungSpansFor(static_cast<std::uint32_t>(repair.atKeyVersion), 1);
+                if (repair.atKeyVersion < 2 || repair.atKeyVersion >= next ||
+                    std::none_of(owed.begin(), owed.end(), [&](const RungSpan& span) {
+                        return span.target == static_cast<std::uint32_t>(repair.targetKeyVersion);
+                    })) {
+                    throw std::runtime_error("SPACE_KEYS_INVALID");
+                }
+            }
+            // Repair rungs and a prune only from a manager's statement; a manager's rotation prunes only when asked.
+            const bool byManager = model.statement.via.empty() ?
+                std::any_of(space.info.users.begin(), space.info.users.end(), [&](const auto& u) {
+                    return u.userId == model.statement.signer && u.role == "manager";
+                }) :
+                std::any_of(space.info.groups.begin(), space.info.groups.end(), [&](const auto& g) {
+                    return g.groupId == model.statement.via && g.role == "manager";
+                });
+            if (!byManager && (model.prune.value_or(false) || !repairs.empty())) {
+                throw std::runtime_error("SPACE_STATEMENT_INVALID");
+            }
+            if (model.prune.value_or(false)) {
+                space.keys.clear();
+                space.info.keysPrunedBelow = next;
+            }
+            space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
+            // Append-only, several per span: every one is served.
+            space.rungs.insert(space.rungs.end(), model.rungs.begin(), model.rungs.end());
+            space.rungs.insert(space.rungs.end(), repairs.begin(), repairs.end());
+            space.info.keyId = model.keyId;
+            applyStatement(space, model.statement, caller);
+            return server::SpaceRotateKeyResult{.keyVersion = space.info.keyVersion}.toJSON();
+        }
+        if (method == "spaceAddRecipients") {
+            const auto model = server::SpaceAddRecipientsModel::fromJSON(params);
+            if (std::any_of(model.keys.begin(), model.keys.end(), [&](const auto& e) {
+                    return e.keyVersion != space.info.keyVersion;
+                })) {
+                throw std::runtime_error("SPACE_KEYS_INVALID");
+            }
+            space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
+            applyStatement(space, model.statement, caller);
+            return Poco::Dynamic::Var();
+        }
+        throw std::runtime_error("the fake bridge has no " + method);
     }
 
     server::GroupInfo serve(const std::string& userId, bool plan) const {
@@ -540,6 +771,14 @@ struct Bridge {
         if (group == "groupDelete") {
             return Poco::Dynamic::Var();
         }
+        if (group.rfind("space", 0) == 0) {
+            return answerSpace(caller, group, params);
+        }
+        if (group == "groupSetVisibility") {
+            onSetVisibility();
+            visibleToContext = params->getValue<std::string>("visibleTo") == "context";
+            return Poco::Dynamic::Var();
+        }
         throw std::runtime_error("the fake bridge has no " + method);
     }
 };
@@ -827,7 +1066,7 @@ protected:
     // member may commit.
     std::string createGroup(
         const std::vector<std::string>& members,
-        const std::optional<core::ContainerPolicy>& policy = OPEN,
+        const std::optional<GroupRulesUpdate>& policy = OPEN,
         const std::vector<std::string>& managers = {"alice"}
     ) {
         std::vector<core::UserWithPubKey> users;
@@ -919,7 +1158,7 @@ protected:
         );
     }
 
-    // A policy commit `committer` signs and the bridge stores, as `updateGroupPolicy` builds it.
+    // A rules commit `committer` signs and the bridge stores, as `updateGroupRules` builds it.
     void policyBy(const std::string& committer, const Poco::Dynamic::Var& policy) {
         const CommitStatement latest = TreeCommits::fromWire(bridge.tree.commits.back());
         CommitStatement statement = latest;
@@ -1971,7 +2210,7 @@ TEST_F(GroupApiLyingBridge, APolicyChangeLosingTheRaceToAnAdditionIsPlannedAgain
         lock.lock();
         bridgeError<srv::GroupRosterVersionMismatchException>();
     };
-    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS);
     const CommitStatement landed = TreeCommits::fromWire(bridge.tree.commits.back());
     EXPECT_EQ(landed.op, CommitOp::Policy);
     EXPECT_EQ(landed.seq, 3u) << "planned again on top of the addition";
@@ -1988,21 +2227,21 @@ TEST_F(GroupApiLyingBridge, APolicyChangeLosingTheRaceToASelfUpdateIsPlannedAgai
             selfUpdateBy("bob");
         }
     };
-    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS);
     EXPECT_EQ(TreeCommits::fromWire(bridge.tree.commits.back()).op, CommitOp::Policy);
     EXPECT_EQ(bridge.tree.commits.size(), 3u);
     EXPECT_EQ(bridge.received.size(), 2u) << "one lost race, one landed";
 }
 
 TEST_F(GroupApiLyingBridge, AnAdditionLosingTheRaceToAPolicyChangeIsPlannedAgain) {
-    // The bridge lands bob's policy commit under alice's addition; the retry signs the new policyHash.
+    // The bridge lands carol's rules commit under alice's addition; the retry signs the new policyHash.
     addUsers({"dave"});
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    const Poco::Dynamic::Var narrowed = policyOf({{"update", "manager"}, {"updatePolicy", "user"}});
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, OPEN, {"alice", "carol"});
+    const Poco::Dynamic::Var narrowed = policyOf({{"addMembers", "members"}, {"removeMembers", "members"}});
     bool first = true;
     bridge.onAdd = [&] {
         if (std::exchange(first, false)) {
-            policyBy("bob", narrowed);
+            policyBy("carol", narrowed);
         }
     };
     client("alice").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}});
@@ -2017,7 +2256,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_TheServedPolicyIsTheOneTheChainSigned) {
     // The bridge widens the served policy without a statement: neither a pinned nor a fresh client takes it.
     const std::string groupId = createGroup({"alice", "bob", "carol"}, std::nullopt);
     client("alice").getGroup(groupId);
-    bridge.tree.policy = policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}});
+    bridge.tree.policy = policyOf({{"addMembers", "members"}, {"removeMembers", "members"}});
     EXPECT_THROW(client("alice").getGroup(groupId), GroupDataIntegrityException);
     EXPECT_THROW(client("carol").getGroup(groupId), GroupDataIntegrityException);
 }
@@ -2025,7 +2264,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_TheServedPolicyIsTheOneTheChainSigned) {
 TEST_F(GroupApiLyingBridge, ANonMemberCannotChangeAGroupsPolicy) {
     addUsers({"dave"});
     const std::string groupId = createGroup({"alice", "bob"});
-    EXPECT_THROW(client("dave").updateGroupPolicy(groupId, OPEN), core::InvalidParamsException);
+    EXPECT_THROW(client("dave").updateGroupRules(groupId, OPEN), core::InvalidParamsException);
     EXPECT_EQ(count("dave", "context.groupUpdatePolicy"), 0u);
 }
 
@@ -2034,7 +2273,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberWithoutTheRoleSignsNothing) {
     addUsers({"dave"});
     const std::string groupId = createGroup({"alice", "bob", "carol"}, std::nullopt);
     EXPECT_THROW(client("bob").removeGroupMembers(groupId, {"carol"}), GroupUnauthorizedSignerException);
-    EXPECT_THROW(client("bob").updateGroupPolicy(groupId, OPEN), GroupUnauthorizedSignerException);
+    EXPECT_THROW(client("bob").updateGroupRules(groupId, OPEN), GroupUnauthorizedSignerException);
     EXPECT_THROW(
         client("bob").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}}),
         GroupUnauthorizedSignerException
@@ -2045,13 +2284,14 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberWithoutTheRoleSignsNothing) {
     EXPECT_TRUE(bridge.received.empty());
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_APolicyOutsideTheGroupGrammarIsNeverSigned) {
-    // ",manager" would admit anybody under a fail-open reader; the client refuses to sign it.
-    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"update", ",manager"}})), core::InvalidParamsException);
+TEST_F(GroupApiLyingBridge, SECURITY_RulesOutsideTheContractAreNeverSigned) {
+    // The old grammar, and a value one rule does not take: refused before anything is signed.
+    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"addMembers", ",manager"}})), core::InvalidParamsException);
+    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"changeRules", "everybody"}})), core::InvalidParamsException);
     EXPECT_EQ(count("alice", "context.groupCreate"), 0u);
     const std::string groupId = createGroup({"alice", "bob"});
     EXPECT_THROW(
-        client("alice").updateGroupPolicy(groupId, policyWith({{"rotateKeys", "manager,,user"}})), core::InvalidParamsException
+        client("alice").updateGroupRules(groupId, policyWith({{"removeMembers", "manager"}})), core::InvalidParamsException
     );
     EXPECT_EQ(count("alice", "context.groupUpdatePolicy"), 0u);
 }
@@ -2062,7 +2302,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_TheReadAfterCompletingAnUnresolvedCommitIsV
     quiet = true;
     addUsers({"dave"});
     const std::string groupId = createGroup(
-        {"alice", "bob", "carol"}, policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "manager"}})
+        {"alice", "bob", "carol"}, OPEN
     );
     int adds = 0;
     bridge.onAdd = [&] {
@@ -2074,16 +2314,16 @@ TEST_F(GroupApiLyingBridge, SECURITY_TheReadAfterCompletingAnUnresolvedCommitIsV
     bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
         if (caller == "bob" && adds == 2) {
             info.treeVersion = 2;
-            info.policy = policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}});
+            info.policy = policyOf({{"addMembers", "members"}});
         }
     };
-    EXPECT_THROW(client("bob").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})), GroupDataIntegrityException);
+    EXPECT_THROW(client("bob").updateGroupRules(groupId, METADATA_TO_MANAGERS), GroupDataIntegrityException);
     EXPECT_EQ(adds, 2) << "the addition was not completed first";
     EXPECT_EQ(count("bob", "context.groupUpdatePolicy"), 0u);
 }
 
-TEST_F(GroupApiLyingBridge, APolicyChangeIsNotTakenForAnotherThatSignsTheSameRules) {
-    // The op key named only the signed rules: a call differing in a Bridge-held field returned on the earlier one.
+TEST_F(GroupApiLyingBridge, ARulesChangeIsNotTakenForAnotherThatNamesOtherRules) {
+    // The op key names the fields asked for: a call asking for other values never returns on the earlier one.
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     int policies = 0;
@@ -2092,18 +2332,14 @@ TEST_F(GroupApiLyingBridge, APolicyChangeIsNotTakenForAnotherThatSignsTheSameRul
             refuse();
         }
     };
-    core::ContainerPolicy first = OPEN;
-    first.get = "all";
-    core::ContainerPolicy second = OPEN;
-    second.get = "manager";
-    EXPECT_ANY_THROW(client("alice").updateGroupPolicy(groupId, first));
-    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, second));
+    EXPECT_ANY_THROW(client("alice").updateGroupRules(groupId, policyWith({{"addMembers", "nobody"}})));
+    EXPECT_NO_THROW(client("alice").updateGroupRules(groupId, policyWith({{"addMembers", "managers"}})));
     ASSERT_GE(bridge.received.size(), 2u);
     const CommitStatement landed = TreeCommits::fromWire(bridge.tree.commits.back());
     EXPECT_EQ(landed.op, CommitOp::Policy);
     ASSERT_TRUE(landed.policy.has_value());
-    EXPECT_NE(privmx::utils::Utils::stringifyVar(landed.policy.value()).find(R"("get":"manager")"), std::string::npos)
-        << "the second call returned on the first one's policy";
+    EXPECT_NE(privmx::utils::Utils::stringifyVar(landed.policy.value()).find(R"("addMembers":"managers")"), std::string::npos)
+        << "the second call returned on the first one's rules";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ASeatTheBridgeAllocatesOutsideTheFreeSeatsIsRefusedBeforeSigning) {
@@ -2140,18 +2376,40 @@ TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) 
     EXPECT_EQ(count("alice", "context.groupAddMembers"), 0u);
 }
 
-// ── the update role for metadata plane authors ─────────────────────────────────────────────
+// ── the editPublicMeta / editPrivateMeta rules for metadata plane authors ──────────────────────────
 
 TEST_F(GroupApiLyingBridge, ANarrowingPolicyCarriesUpThePlanesOfAuthorsWhoLostTheRole) {
-    // bob writes under the open policy; alice narrows `update` to managers and carries bob's plane in her name.
+    // bob writes under the open rules; alice narrows both metadata rules to managers and carries bob's plane in her
+    // name.
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob's"), 1);
-    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}, {"updatePolicy", "manager"}}));
+    client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS);
     EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
     EXPECT_EQ(bridge.rest.privateMeta.author, "alice") << "the creator's own plane is not carried";
     const Group read = client("carol").getGroup(groupId);
     EXPECT_EQ(read.statusCode, 0);
     EXPECT_EQ(read.publicMeta.stdString(), "bob's");
+}
+
+TEST_F(GroupApiLyingBridge, ANarrowingCarriesOnlyThePlaneWhoseRuleNarrowed) {
+    // bob writes both planes; only editPublicMeta narrows, so only the public plane is refused and carried.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob's public"), 1);
+    client("bob").updateGroupPrivateMeta(groupId, core::Buffer::from("bob's private"), 1);
+    client("alice").updateGroupRules(groupId, policyWith({{"editPublicMeta", "managers"}}));
+    EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
+    EXPECT_EQ(bridge.rest.privateMeta.author, "bob") << "bob keeps editPrivateMeta";
+    const Group read = client("carol").getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.publicMeta.stdString(), "bob's public");
+    EXPECT_EQ(read.privateMeta.stdString(), "bob's private");
+    EXPECT_EQ(read.rules.editPublicMeta, "managers");
+    EXPECT_EQ(read.rules.editPrivateMeta, "members");
+    // A plane is judged by its own rule: bob may still write the private one, not the public one.
+    EXPECT_NO_THROW(client("bob").updateGroupPrivateMeta(groupId, core::Buffer::from("again"), 2));
+    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 2);
+    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotReSignAPlaneWrittenAfterItWasRead) {
@@ -2168,7 +2426,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotReSignAPlaneWrittenAfterIt
         bridge.rest.publicMeta = v3;
         bridge.rest.publicMetaVersion = 3;
     };
-    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS);
     EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
     EXPECT_EQ(bridge.rest.publicMeta.version, 3) << "alice re-signed bob's late entry";
     EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
@@ -2187,38 +2445,38 @@ TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotCarryALosersPlaneWrittenAf
         client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("after the read"), 2);
         lock.lock();
     };
-    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS);
     EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
     EXPECT_EQ(bridge.rest.publicMeta.version, 3);
     EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "readers refuse it: bob lost update";
 }
 
 TEST_F(GroupApiLyingBridge, ANarrowingThatWouldStrandAPlaneIsRefusedBeforeSigning) {
-    // bob may change the policy but would lose `update` himself: nobody would carry his plane.
+    // alice may change the rules but would lose editPublicMeta herself: nobody would carry bob's plane.
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob's"), 1);
     EXPECT_THROW(
-        client("bob").updateGroupPolicy(groupId, policyWith({{"update", "manager"}, {"updatePolicy", "user"}})),
-        core::InvalidParamsException
+        client("alice").updateGroupRules(groupId, policyWith({{"editPublicMeta", "nobody"}})), core::InvalidParamsException
     );
-    EXPECT_EQ(count("bob", "context.groupUpdatePolicy"), 0u);
-    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})))
-        << "alice keeps update and carries it";
+    EXPECT_EQ(count("alice", "context.groupUpdatePolicy"), 0u);
+    EXPECT_NO_THROW(client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS))
+        << "alice keeps the rule and carries it";
 }
 
-TEST_F(GroupApiLyingBridge, ACreationWhoseCreatorCannotUpdateIsRefusedBeforeSigning) {
-    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"update", "none"}})), core::InvalidParamsException);
-    EXPECT_THROW(
-        createGroup({"alice", "bob"}, policyWith({{"update", "manager"}}), {}), core::InvalidParamsException
-    ) << "the creator in users only";
+TEST_F(GroupApiLyingBridge, ACreationWhoseCreatorCannotWriteItsMetadataIsRefusedBeforeSigning) {
+    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"editPublicMeta", "nobody"}})), core::InvalidParamsException);
+    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"editPrivateMeta", "nobody"}})), core::InvalidParamsException);
+    EXPECT_THROW(createGroup({"alice", "bob"}, std::nullopt, {}), core::InvalidParamsException)
+        << "the creator in users only, under the defaults";
     EXPECT_EQ(count("alice", "context.groupCreate"), 0u);
-    EXPECT_NO_THROW(createGroup({"alice", "bob"}, policyWith({{"update", "manager"}}))) << "the creator a manager";
+    EXPECT_NO_THROW(createGroup({"alice", "bob"}, std::nullopt)) << "the creator a manager";
+    EXPECT_NO_THROW(createGroup({"alice", "bob"}, OPEN, {})) << "the creator a plain member, metadata the members'";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotCarryAPlaneWrittenWithoutTheRole) {
-    // bob, a plain user under `update: manager`, writes a plane the bridge stores and every reader refuses. Removing
-    // bob must not launder it into the new epoch under alice's name.
-    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"update", "manager"}}));
+    // bob, a plain member under `editPublicMeta: managers`, writes a plane the bridge stores and every reader refuses.
+    // Removing bob must not launder it into the new epoch under alice's name.
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, std::nullopt);
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
     ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0) << "refused already before the removal";
     client("alice").removeGroupMembers(groupId, {"bob"});
@@ -2235,7 +2493,7 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedByTheNextCall) {
             bridgeError<srv::GroupVersionMismatchException>();
         }
     };
-    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));
+    EXPECT_NO_THROW(client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS));
     EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
     EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "until the carry completes";
     EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0) << "alice's next read retries it first";
@@ -2252,7 +2510,7 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedAfterADisconnect) {
             bridgeError<srv::GroupVersionMismatchException>();
         }
     };
-    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));
+    EXPECT_NO_THROW(client("alice").updateGroupRules(groupId, METADATA_TO_MANAGERS));
     clients.at("alice")->connectionImpl->getEventMiddleware()->emitDisconnectedEvent();
     EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
     EXPECT_EQ(bridge.rest.publicMeta.author, "alice") << "the carry was dropped with the connection";
@@ -2261,7 +2519,7 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedAfterADisconnect) {
 
 TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNotAcceptANoRolePlane) {
     // R2-S2: an unseated answer is verified (verifyListed) before the mapper reads its policy and roster.
-    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"update", "manager"}}));
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, std::nullopt);
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
     client("carol").getGroup(groupId); // carol holds the epoch's key from an honest read
     const auto stripCarol = [&](const std::string& caller, server::GroupInfo& info) {
@@ -2276,7 +2534,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNot
     bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
         stripCarol(caller, info);
         if (caller == "carol") {
-            info.policy = policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}});
+            info.policy = policyOf({{"editPublicMeta", "members"}, {"editPrivateMeta", "members"}});
         }
     };
     const Group widened = client("carol").getGroup(groupId);
@@ -3351,6 +3609,31 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACorruptedPreviousIdentityBlobAbortsTheAdop
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u) << "a retry once the slot is fixed";
 }
 
+TEST_F(GroupApiLyingBridge, APreviousIdentityBlobOfAnEarlierLayoutIsTakenAsNoPins) {
+    // A slot an earlier build sealed (version 1, the nine-rule pins): authentic, but nothing this build reads.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    client("alice").resolveGroupPrivKey(groupId);
+    const PrivateKey previous = bridge.users.at("alice");
+    clients.erase("alice");
+    const std::string slot = store->keyWith("group-pins/", "/" + previous.getPublicKey().toBase58DER());
+    ASSERT_EQ(PinBlob::VERSION, 2);
+    store->put(slot, core::LocalSeal(previous, PinBlob::LABEL, 1, slot).seal("an earlier layout"));
+    changeKeyOf(bridge, clients, "alice");
+    EXPECT_NO_THROW(client("alice").adoptPreviousIdentity(previous));
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 0u) << "nothing adopted";
+    EXPECT_FALSE(clients.at("alice")->connectionImpl->previousIdentities().empty()) << "the key is recorded";
+    // A blob neither version opens is still a corrupted slot.
+    std::string bad = core::LocalSeal(previous, PinBlob::LABEL, 1, slot).seal("an earlier layout");
+    bad[bad.size() / 2] ^= 0x01;
+    store->put(slot, bad);
+    clients.erase("alice");
+    EXPECT_THROW(
+        Client(bridge, "alice", store, bridgeIdentity, previous), core::LocalStateIntegrityException
+    );
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalAdoptsThePreviousKeysPinsFirst) {
     // An app that skipped Connection::adoptPreviousIdentity still renews on the previous key's pins, so the renewal
     // is never planned on a state rolled back below what the previous key verified.
@@ -3428,6 +3711,88 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotSealACachedGrantKeyThatIsNot
     });
     ASSERT_NE(removal, bridge.calls.rend());
     EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
+}
+
+// bob's own leaf does not open, so his removal would abandon history: beside removeMembers, changeRules and both
+// edit rules. Refused before anything is sent without them; the Bridge enforces the same.
+class GroupApiLyingBridgeAbandon : public GroupApiLyingBridge {
+protected:
+    bool bobRemovesCarolWithout(const std::string& missing) {
+        quiet = true;
+        std::map<std::string, std::string> rules;
+        for (const std::string& field : TreeCommits::ruleFields()) {
+            rules[field] = field == missing ? "managers" : "members";
+        }
+        const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith(rules));
+        selfUpdateBy("alice");
+        garbleLeafEdgeOf(bridge, "bob", "alice");
+        try {
+            client("bob").removeGroupMembers(groupId, {"carol"});
+        } catch (const GroupUnauthorizedSignerException& e) {
+            EXPECT_NE(std::string(e.what()).find("renewLeaf"), std::string::npos) << "not actionable: " << e.what();
+            EXPECT_EQ(count("bob", "context.groupRemoveMembers"), 0u);
+            return false;
+        }
+        expectRemoved(bridge, "carol");
+        return true;
+    }
+};
+
+TEST_F(GroupApiLyingBridgeAbandon, AllowedWithChangeRulesAndBothEditRules) {
+    EXPECT_TRUE(bobRemovesCarolWithout(""));
+}
+
+TEST_F(GroupApiLyingBridgeAbandon, RefusedWithoutChangeRules) {
+    EXPECT_FALSE(bobRemovesCarolWithout("changeRules"));
+}
+
+TEST_F(GroupApiLyingBridgeAbandon, RefusedWithoutEditPublicMeta) {
+    EXPECT_FALSE(bobRemovesCarolWithout("editPublicMeta"));
+}
+
+TEST_F(GroupApiLyingBridgeAbandon, RefusedWithoutEditPrivateMeta) {
+    EXPECT_FALSE(bobRemovesCarolWithout("editPrivateMeta"));
+}
+
+TEST_F(GroupApiLyingBridge, AVisibilityChangeLosingARaceIsSentAgain) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"}, std::nullopt);
+    int calls = 0;
+    bridge.onSetVisibility = [&] {
+        if (calls++ == 0) {
+            bridgeError<srv::GroupRotatedAlreadyException>();
+        }
+    };
+    EXPECT_NO_THROW(client("alice").setGroupVisibility(groupId, "context"));
+    EXPECT_EQ(count("alice", "context.groupSetVisibility"), 2u);
+    EXPECT_TRUE(bridge.visibleToContext);
+}
+
+TEST_F(GroupApiLyingBridge, AVisibilityChangeNeedsChangeVisibility) {
+    // The visibility is the Bridge's setting; the rule is signed, and checked on a verified read before the call.
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob"}, std::nullopt);
+    EXPECT_THROW(client("bob").setGroupVisibility(groupId, "context"), GroupUnauthorizedSignerException);
+    EXPECT_EQ(count("bob", "context.groupSetVisibility"), 0u);
+    EXPECT_THROW(client("dave").setGroupVisibility(groupId, "context"), core::InvalidParamsException) << "a non-member";
+    EXPECT_EQ(count("dave", "context.groupSetVisibility"), 0u);
+}
+
+TEST(GroupRulesPreset, TheImmutablePresetClosesMembershipRolesAndRules) {
+    const GroupRulesUpdate preset = GroupRulesUpdate::createImmutable();
+    for (const auto* field : {&preset.addMembers, &preset.removeMembers, &preset.changeRoles, &preset.changeRules}) {
+        EXPECT_EQ(field->value_or(""), "nobody");
+    }
+    for (const auto* field :
+         {&preset.replaceMemberKeys, &preset.changeVisibility, &preset.editPublicMeta, &preset.editPrivateMeta}) {
+        EXPECT_FALSE(field->has_value()) << "left to its default";
+    }
+    privmx::endpoint::group::GroupRules rules{
+        "nobody", "nobody", "managers", "nobody", "nobody", "managers", "members", "managers"
+    };
+    EXPECT_TRUE(rules.isImmutable());
+    rules.changeRules = "managers";
+    EXPECT_FALSE(rules.isImmutable());
 }
 
 TEST_F(GroupApiLyingBridge, AnEnvelopeNamingAGroupWithNoKeysLeavesNoSessionBehind) {
@@ -3897,6 +4262,43 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_WindowPagesThatNeverEndStopAtTheWi
     }
 }
 
+TEST_F(GroupApiLyingBridgeOldEpochs, AFloorSetWithoutARotationReadsAsAnEraBoundaryNotTampering) {
+    // A floor the Bridge raised with no statement of the group's (as after a removal that abandoned history): the
+    // rungs below go. The group still reads cleanly; an envelope below the floor is out of reach as history, not a
+    // broken ladder.
+    bridge.eraFloor = static_cast<std::int64_t>(bridge.tree.state.epoch);
+    bridge.rungs.erase(
+        std::remove_if(
+            bridge.rungs.begin(), bridge.rungs.end(),
+            [&](const server::GroupArchiveRung& rung) { return rung.targetKeyVersion < bridge.eraFloor; }
+        ),
+        bridge.rungs.end()
+    );
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult& result) { result = server::GroupGetEpochKeysResult{}; };
+    const Group read = client("carol").getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.privateMeta.stdString(), "private");
+    // The Bridge deletes the archived epoch keys below the floor too: the envelope's key is simply not published.
+    try {
+        client("carol").decrypt(groupId, NOWHERE, sealed, ANY);
+        ADD_FAILURE() << "epoch 1 opened below the era floor";
+    } catch (const GroupDataIntegrityException& e) {
+        ADD_FAILURE() << "read as an integrity failure: " << e.what();
+    } catch (const std::exception& e) {
+        EXPECT_EQ(std::string(e.what()).find("verification failed"), std::string::npos) << e.what();
+    }
+    // With the epoch key still served the descent stops at the floor: out of reach, not tampered with.
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    try {
+        client("bob").decrypt(groupId, NOWHERE, sealed, ANY);
+        ADD_FAILURE() << "epoch 1 opened below the era floor";
+    } catch (const GroupDataIntegrityException& e) {
+        ADD_FAILURE() << "read as an integrity failure: " << e.what();
+    } catch (const std::exception& e) {
+        EXPECT_EQ(std::string(e.what()).find("verification failed"), std::string::npos) << e.what();
+    }
+}
+
 TEST_F(GroupApiLyingBridgeOldEpochs, AFloorRaisedByARotationSinceTheGroupWasReadIsNoIntegrityFailure) {
     // Between bob's read of the group and of the archive another member cut the era and rotated: the archive's floor
     // is past the epoch bob read, not past the archive's own. Epoch 1 is then out of reach, which is all it means.
@@ -3968,13 +4370,13 @@ TEST_F(GroupApiLyingBridge, TheArchiveSpanLimitIsTheBridges) {
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AHintOnAChainItsMembersCouldNotSignFailsTheReadAsAFork) {
-    // The hint's digest is that of a policy change bob (a user; the policy is the managers') genuinely signed, and
+    // The hint's digest is that of a rules change bob (a user; changeRules is the managers') genuinely signed, and
     // the bridge serves it on the chain, below the head. The replay from genesis to the hint meets a signer out of
     // its role: a fork, as for any hint the honest chain does not reach, not a refused signer.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId =
-        createGroup({"alice", "bob"}, policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "manager"}}));
+        createGroup({"alice", "bob"}, policyWith({{"addMembers", "members"}, {"removeMembers", "members"}}));
     const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
     client("bob").getGroup(groupId);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
@@ -4396,6 +4798,26 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberClaimToARecipientIsReportedAsWhatItI
 
     // Bob is in neither.
     EXPECT_THROW(client("bob").decryptShared(CONTEXT, NOWHERE, forged, ANY), EnvelopeNotARecipientException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASharedEnvelopeReadOnAForkedHistoryIsRefusedAsAFork) {
+    // The recipient group's history rolled back below the reader's pin: the answer is the fork, never "not a
+    // recipient", which would hide it.
+    quiet = true;
+    const std::string billing = createGroup({"alice", "carol"});
+    const std::string billingKey = client("alice").getGroup(billing).groupPubKey;
+    const Envelope sealed = GroupEnvelopeEncryptor().packMemberEnvelope(
+        "care-team", "0123456789abcdef0123456789abcdef", core::Buffer::from("approved"), bridge.users.at("carol"),
+        privmx::crypto::Crypto::randomBytes(32),
+        EnvelopeSeal{.binding = {}, .keyVersion = 1, .encryptedAt = 1, .authorUserId = "carol"},
+        {WireRecipient{.isGroup = true, .id = billing, .pubKey = billingKey, .keyVersion = 1}}
+    );
+    const Bridge atSeq1 = bridge;
+    selfUpdateBy("carol");
+    client("alice").getGroup(billing); // pins seq 2
+    clients.at("alice")->connectionImpl->getEventMiddleware()->emitDisconnectedEvent(); // drops the cached keys
+    bridge.tree = atSeq1.tree;
+    EXPECT_THROW(client("alice").decryptShared(CONTEXT, NOWHERE, sealed, ANY), GroupHistoryForkException);
 }
 
 TEST_F(GroupApiLyingBridge, APageOfEnvelopesReportsEachOnItsOwn) {
@@ -5057,68 +5479,528 @@ TEST_F(GroupApiLyingBridge, WithoutAStoreASubjectIsKeptForTheSession) {
     EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2)); // a first contact again
 }
 
-TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVerifiedKeys) {
+TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshIsHeldToWhatTheReaderCanVerifyOfTheGroup) {
     using Access = GroupApiImplTestAccess;
     const std::string real = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
     const std::string forged = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
-    const core::GroupEpochInfo current{.keyVersion = 4, .groupPubKey = real};
-    const auto viaG = [](std::uint64_t version, const std::string& key) {
-        return Access::GroupKeyRefresh{.seq = 7, .groupId = "g", .groupKeyVersion = version, .groupPubKey = key, .byGroup = true};
-    };
-    // A removed member, still holding the key the Space pinned for G, signs "via G" a key of their own for G.
-    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current).has_value()) << "another key at G's epoch";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current).has_value()) << "ahead of G";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current).has_value()) << "cannot be verified";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt).has_value()) << "G shows nothing";
-    // A member of G knows every epoch key of G.
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, current).has_value());
-    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::int64_t{3}, current).has_value());
-    // The real current key holds, through G or from a manager.
-    EXPECT_FALSE(Access::refusedRefresh(viaG(4, real), std::nullopt, current).has_value());
-    auto byManager = viaG(3, forged);
-    byManager.byGroup = false;
-    EXPECT_FALSE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "a manager could replace G";
-    byManager.groupKeyVersion = 4;
-    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "shown wrong even for a manager";
-    // A past epoch of G, replayed after G moved on, by a reader holding no key of that epoch: held to the key G's
-    // verified chain opened that epoch with, never taken for being below the current epoch.
     const std::string past = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
-    EXPECT_FALSE(Access::refusedRefresh(viaG(3, past), std::nullopt, current, past).has_value()) << "G's own epoch 3";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past).has_value()) << "not G's epoch 3";
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, past), std::nullopt, std::nullopt, past).has_value()) << "G unverified";
-    byManager.groupKeyVersion = 3;
-    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current, past).has_value()) << "the chain shows it wrong";
-    // A reader with no view of G at all (not a member, G members-only): the via-G signature is the proof it gets.
-    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt, std::nullopt, true).has_value());
-    // Still refused when anything it does know shows it wrong.
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, std::nullopt, std::nullopt, true).has_value());
-    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current, std::nullopt, true).has_value());
-    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current, std::nullopt, true).has_value());
-    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past, true).has_value());
+    const core::GroupEpochInfo current{.keyVersion = 4, .groupPubKey = real};
+    // Whoever signed it - through G, a manager, or a user of the Space through another group: the signer is not
+    // what the reader goes by.
+    const auto refresh = [](std::uint64_t version, const std::string& key) {
+        return Access::GroupKeyRefresh{.seq = 7, .groupId = "g", .groupKeyVersion = version, .groupPubKey = key};
+    };
+    // What the reader can verify, it does: G's verified current epoch...
+    EXPECT_FALSE(Access::refusedRefresh(refresh(4, real), std::nullopt, current).has_value()) << "G's current key";
+    EXPECT_TRUE(Access::refusedRefresh(refresh(4, forged), std::nullopt, current).has_value()) << "another key at G's epoch";
+    EXPECT_TRUE(Access::refusedRefresh(refresh(5, forged), std::nullopt, current).has_value()) << "ahead of G";
+    // ... a member's own epoch keys of G...
+    EXPECT_TRUE(Access::refusedRefresh(refresh(3, forged), std::int64_t{2}, current).has_value()) << "another epoch's key";
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, forged), std::int64_t{3}, current).has_value());
+    // ... and, for an epoch G has left, the key G's verified chain opened it with.
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, past), std::nullopt, current, past).has_value()) << "G's own epoch 3";
+    EXPECT_TRUE(Access::refusedRefresh(refresh(3, forged), std::nullopt, current, past).has_value()) << "not G's epoch 3";
+    // What it cannot verify (G hidden from it: no key, no epoch, no chain) it takes as signed, from any recipient.
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, forged), std::nullopt, std::nullopt).has_value());
+    EXPECT_FALSE(Access::refusedRefresh(refresh(3, past), std::nullopt, current).has_value()) << "a past epoch, no chain";
 }
 
-// Two processes of one user on one device store. The second loaded an earlier Space S (at seq 2) before S was
-// created again (seq 1) in a third: its next save, of another Space, must not put the earlier S back.
-TEST_F(GroupApiLyingBridge, ASaveOfAnotherSpaceKeepsASpaceCreatedAgainInAnotherProcess) {
-    using Access = GroupApiImplTestAccess;
-    store = std::make_shared<MemoryPinStore>();
-    const auto state = [](const std::string& id, std::uint64_t seq, const std::string& digest) {
-        privmx::endpoint::group::keytree::SpaceLogState s;
-        s.spaceId = id;
-        s.seq = seq;
-        s.digest = digest;
-        return s;
-    };
-    const std::string oldDigest(32, 'o'), newDigest(32, 'n');
-    Access::rememberSpaceLog(client("alice"), state("S", 2, oldDigest)); // an earlier session
-    GroupApiImpl& second = sibling("alice");
-    Access::loadSpacePins(second);
-    Access::rememberSpaceLog(sibling("alice"), state("S", 1, newDigest), true); // S created again
-    Access::rememberSpaceLog(second, state("T", 1, std::string(32, 't')));
 
-    const auto stored = Access::storedSpacePins(sibling("alice"));
-    ASSERT_EQ(stored.count("S"), 1u);
-    EXPECT_EQ(stored.at("S").first, 1u);
-    EXPECT_EQ(stored.at("S").second, newDigest);
-    EXPECT_EQ(stored.count("T"), 1u);
+// ── Spaces against the fake Bridge ───────────────────────────────────────────────────────────────────────
+
+class GroupApiLyingBridgeSpaces : public GroupApiLyingBridge {
+protected:
+    SpaceRecipient person(const std::string& id, const std::string& role) {
+        return SpaceRecipient{.groupId = {}, .user = user(id), .role = role};
+    }
+    std::string makeSpace() {
+        quiet = true;
+        addUsers({"dave"});
+        return client("alice").createSpace(
+            CONTEXT, {person("alice", "manager"), person("bob", "user")}, core::Buffer::from("pub"),
+            core::Buffer::from("priv"), std::nullopt
+        );
+    }
+};
+
+TEST_F(GroupApiLyingBridgeSpaces, EveryEarlierVersionIsReadDownTheLadderFromTheCurrentKey) {
+    const std::string spaceId = makeSpace();
+    constexpr std::int64_t VERSIONS = 9;
+    std::vector<core::Buffer> sealed;
+    for (std::int64_t version = 1; version <= VERSIONS; ++version) {
+        if (version > 1) {
+            client("alice").rotateSpaceKey(spaceId);
+        }
+        sealed.push_back(client("alice").encryptInSpace(spaceId, message("m"), core::Buffer::from(std::to_string(version))));
+    }
+    ASSERT_EQ(bridge.spaces.at(spaceId).info.keyVersion, VERSIONS);
+    EXPECT_EQ(bridge.spaces.at(spaceId).rungs.size(), LadderMath::totalRungsThrough(VERSIONS)) << "the canonical rungs";
+    for (const auto& entry : bridge.spaces.at(spaceId).keys) {
+        EXPECT_EQ(entry.keyVersion, VERSIONS) << "only the current version is wrapped to recipients";
+    }
+    // Version 1 first: only the rungs on its path are asked for, one version a request.
+    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m"), sealed[0], ANY).data.stdString(), "1");
+    const std::size_t toOne = count("bob", "context.spaceGetKeyArchive");
+    EXPECT_EQ(toOne, LadderMath::canonicalDescent(VERSIONS, 1, 1).size());
+    for (std::int64_t version = VERSIONS; version >= 1; --version) {
+        EXPECT_EQ(
+            client("bob").decryptInSpace(spaceId, message("m"), sealed[version - 1], ANY).data.stdString(),
+            std::to_string(version)
+        );
+    }
+    const std::size_t all = count("bob", "context.spaceGetKeyArchive");
+    for (std::int64_t version = 1; version <= VERSIONS; ++version) {
+        client("bob").decryptInSpace(spaceId, message("m"), sealed[version - 1], ANY);
+    }
+    EXPECT_EQ(count("bob", "context.spaceGetKeyArchive"), all) << "each key derived once";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AForgedRungIsRefusedByTheKeyCommit) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    const core::Buffer atTwo = [&] {
+        client("alice").rotateSpaceKey(spaceId);
+        return client("alice").encryptInSpace(spaceId, message("m2"), core::Buffer::from("v2"));
+    }();
+    client("alice").rotateSpaceKey(spaceId);
+    // A recipient (or the Bridge with a recipient's help) sealing another key into rung 3->2: well-formed, under the
+    // right key and span, and still not the key version 2's statement committed to.
+    const std::string atThree = GroupApiImplTestAccess::spaceKey(client("alice"), spaceId, 3);
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            if (rung.atKeyVersion == 3 && rung.targetKeyVersion == 2) {
+                rung.data = privmx::utils::Base64::from(
+                    SpaceLog::sealRung(spaceId, 3, 2, atThree, privmx::crypto::Crypto::randomBytes(32))
+                );
+            }
+        }
+    };
+    EXPECT_THROW(client("bob").decryptInSpace(spaceId, message("m2"), atTwo, ANY), GroupDataIntegrityException);
+    // The Bridge alone: bytes that open under no key.
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+        }
+    };
+    EXPECT_THROW(client("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY), std::exception);
+    bridge.onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) {};
+    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
+        << "nothing forged was kept";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AForgedRungIsRoutedAroundThroughTheReadersOwnEarlierWrap) {
+    // bob, no manager, rotates: the Bridge keeps version 1's wraps, since it cannot tell his rungs are sound.
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    client("bob").rotateSpaceKey(spaceId);
+    client("bob").rotateSpaceKey(spaceId);
+    const std::string atThree = GroupApiImplTestAccess::spaceKey(client("bob"), spaceId, 3);
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            if (rung.atKeyVersion == 3) {
+                rung.data = privmx::utils::Base64::from(SpaceLog::sealRung(
+                    spaceId, 3, static_cast<std::uint64_t>(rung.targetKeyVersion), atThree,
+                    privmx::crypto::Crypto::randomBytes(32)
+                ));
+            }
+        }
+    };
+    // A session holding no earlier key yet.
+    GroupApiImpl& alice = sibling("alice");
+    EXPECT_EQ(alice.decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
+        << "through alice's own wrap of version 1";
+
+    // After a manager's rotation the older wraps are gone: nothing to route around a forged rung with.
+    client("alice").rotateSpaceKey(spaceId);
+    const std::string atFour = GroupApiImplTestAccess::spaceKey(client("alice"), spaceId, 4);
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            if (rung.atKeyVersion == 4) {
+                rung.data = privmx::utils::Base64::from(SpaceLog::sealRung(
+                    spaceId, 4, static_cast<std::uint64_t>(rung.targetKeyVersion), atFour,
+                    privmx::crypto::Crypto::randomBytes(32)
+                ));
+            }
+        }
+    };
+    EXPECT_THROW(sibling("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY), GroupDataIntegrityException);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AnAdditionWrapsOnlyTheCurrentVersionAndTheNewcomerReadsTheFirst) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    for (int i = 0; i < 4; ++i) {
+        client("alice").rotateSpaceKey(spaceId);
+    }
+    client("alice").addSpaceRecipients(spaceId, {person("carol", "user")});
+    const auto& add = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceAddRecipients";
+    });
+    ASSERT_NE(add, bridge.calls.rend());
+    const auto sent = server::SpaceAddRecipientsModel::fromJSON(add->params);
+    ASSERT_EQ(sent.keys.size(), 1u) << "one wrap, of the current version, for the one newcomer";
+    EXPECT_EQ(sent.keys[0].keyVersion, 5);
+    EXPECT_EQ(client("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
+        << "the newcomer reads what was there, down the ladder";
+    EXPECT_EQ(count("carol", "context.spaceGetKeyArchive"), LadderMath::canonicalDescent(5, 1, 1).size());
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, ANewSessionVerifiesOnlyTheStatementsSinceTheStoredState) {
+    store = std::make_shared<MemoryPinStore>();
+    const std::string spaceId = makeSpace();
+    client("alice").rotateSpaceKey(spaceId);
+    client("alice").rotateSpaceKey(spaceId);
+    client("bob").getSpace(spaceId); // verifies statements 1..3 and stores the state
+    client("alice").rotateSpaceKey(spaceId);
+    const std::size_t before = bridge.calls.size();
+    GroupApiImpl& next = sibling("bob");
+    EXPECT_EQ(next.getSpace(spaceId).keyVersion, 4);
+    std::vector<std::int64_t> asked;
+    for (std::size_t i = before; i < bridge.calls.size(); ++i) {
+        if (bridge.calls[i].caller == "bob" && bridge.calls[i].method == "context.spaceGetStatements") {
+            asked.push_back(server::SpaceGetStatementsModel::fromJSON(bridge.calls[i].params).fromSeq);
+        }
+    }
+    EXPECT_EQ(asked, std::vector<std::int64_t>{3}) << "statement 4 only";
+
+    // A history rewritten at the stored state: the statement after it does not follow it.
+    client("alice").rotateSpaceKey(spaceId);
+    auto& statements = bridge.spaces.at(spaceId).statements;
+    const std::string kept = statements[4].prevDigest;
+    statements[4].prevDigest = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
+    EXPECT_THROW(sibling("bob").getSpace(spaceId), GroupHistoryForkException);
+    statements[4].prevDigest = kept;
+    // Served behind it.
+    statements.pop_back();
+    bridge.spaces.at(spaceId).info.seq = 4;
+    bridge.spaces.at(spaceId).info.keyVersion = 4;
+    bridge.spaces.at(spaceId).info.seq = 3;
+    EXPECT_THROW(sibling("bob").getSpace(spaceId), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_ARefreshWhoseGroupChainFailsToReadIsNotTakenAsUnverifiable) {
+    // Sales (alice, carol), visible to the Context, is a recipient. Its key moves to epoch 2, the Space follows
+    // (a refresh), and sales moves on to epoch 3: bob, outside sales, holds the refresh to epoch 2 against the
+    // key sales' verified chain opened that epoch with.
+    quiet = true;
+    const std::string sales = createGroup({"alice", "carol"});
+    bridge.visibleToContext = true;
+    const std::string spaceId = client("alice").createSpace(
+        CONTEXT,
+        {person("alice", "manager"), person("bob", "user"),
+         SpaceRecipient{.groupId = sales, .user = std::nullopt, .role = "user"}},
+        core::Buffer::from("pub"), core::Buffer::from("priv"), std::nullopt
+    );
+    client("alice").rotateGroupKey(sales);
+    client("alice").rotateSpaceKey(spaceId);
+    ASSERT_EQ(bridge.spaces.at(spaceId).statements.back().refreshedGroups.size(), 1u);
+    client("alice").rotateGroupKey(sales);
+    EXPECT_EQ(sibling("bob").getSpace(spaceId).keyVersion, 2) << "the chain read, the refresh verified";
+    // The same read with the chain failing: an error, never "nothing to verify" taken as signed.
+    bridge.onCommits = [](std::uint64_t, std::uint64_t, server::GroupGetTreeCommitsResult&) {
+        throw std::runtime_error("the Bridge is down");
+    };
+    EXPECT_ANY_THROW(sibling("bob").getSpace(spaceId));
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AStatementCarriesItsChangesNotTheRoster) {
+    quiet = true;
+    std::vector<SpaceRecipient> recipients{person("alice", "manager")};
+    for (int i = 0; i < 30; ++i) {
+        const std::string id = "member" + std::to_string(i);
+        addUsers({id});
+        recipients.push_back(person(id, "user"));
+    }
+    const std::string spaceId = client("alice").createSpace(
+        CONTEXT, recipients, core::Buffer::from("pub"), core::Buffer::from("priv"), std::nullopt
+    );
+    client("alice").rotateSpaceKey(spaceId);
+    client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "member7"}});
+    const auto& statements = bridge.spaces.at(spaceId).statements;
+    ASSERT_EQ(statements.size(), 3u);
+    const auto size = [](const server::SpaceStatement& s) { return privmx::utils::Utils::stringifyVar(s.toJSON()).size(); };
+    EXPECT_EQ(statements[0].addedUsers.size(), 31u) << "a creation names everyone";
+    EXPECT_TRUE(statements[1].addedUsers.empty() && statements[1].removedUsers.empty());
+    EXPECT_EQ(statements[2].removedUsers, std::vector<std::string>{"member7"});
+    EXPECT_LT(size(statements[1]), 1200u) << "a rotation of 31 recipients";
+    EXPECT_LT(size(statements[2]), 1200u);
+    EXPECT_GT(size(statements[0]), 3000u);
+    // Read by a fresh session: the roster is what the deltas add up to.
+    const SpaceState read = sibling("member3").getSpace(spaceId);
+    EXPECT_EQ(read.users.size(), 30u);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_GarbageRungsFromAMemberAreRepairedAtTheNextManagerRotation) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    // bob, a user of the Space, rotates twice with rungs that open to nothing (the Bridge cannot tell).
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob") {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    client("bob").rotateSpaceKey(spaceId);
+    client("bob").rotateSpaceKey(spaceId);
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0) << "no prune from a user's rotation";
+    // A newcomer has no earlier wrap to go round them.
+    client("alice").addSpaceRecipients(spaceId, {person("carol", "user")});
+    EXPECT_THROW(sibling("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY), GroupDataIntegrityException);
+
+    // alice, a manager, rotates: she checks versions 1..3, repairs 2->1 and 3->2 (her own wraps still reach the keys),
+    // and prunes.
+    sibling("alice").rotateSpaceKey(spaceId);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    ASSERT_TRUE(sent.repairRungs.has_value());
+    std::set<std::pair<std::int64_t, std::int64_t>> repaired;
+    for (const auto& rung : sent.repairRungs.value()) {
+        repaired.insert({rung.atKeyVersion, rung.targetKeyVersion});
+    }
+    EXPECT_EQ(repaired, (std::set<std::pair<std::int64_t, std::int64_t>>{{2, 1}, {3, 2}}));
+    EXPECT_EQ(sent.prune, std::optional<bool>(true));
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 4);
+    for (const auto& entry : bridge.spaces.at(spaceId).keys) {
+        EXPECT_EQ(entry.keyVersion, 4) << "the earlier wraps went";
+    }
+    // The garbage rungs stay beside the repairs; a newcomer reads version 1 down the ladder.
+    EXPECT_EQ(sibling("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
+    // The next manager rotation has nothing left to repair.
+    sibling("alice").rotateSpaceKey(spaceId);
+    const auto next = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    EXPECT_FALSE(server::SpaceRotateKeyModel::fromJSON(next->params).repairRungs.has_value());
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AManagerChecksEveryVersionSinceTheLastPruneInFewRequests) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    // 301 rotations by bob, a user (no prune); the one that makes version 8, an aligned version with skip rungs to
+    // 6 and 4, has garbage rungs.
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob" && model.statement.keyVersion == 8) {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    for (int i = 0; i < 301; ++i) {
+        client("bob").rotateSpaceKey(spaceId);
+    }
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    ASSERT_EQ(bridge.spaces.at(spaceId).info.keyVersion, 302);
+    // One manager rotation, in a fresh session: every version 1..302 checked, version 8 repaired, pruned.
+    const std::size_t before = count("alice", "context.spaceGetKeyArchive");
+    sibling("alice").rotateSpaceKey(spaceId);
+    const std::size_t asked = count("alice", "context.spaceGetKeyArchive") - before;
+    EXPECT_LT(asked, 12u) << "pages of the range and a few hops, not one request a version";
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    std::set<std::pair<std::int64_t, std::int64_t>> repaired;
+    for (const auto& rung : sent.repairRungs.value_or(std::vector<server::SpaceRung>{})) {
+        repaired.insert({rung.atKeyVersion, rung.targetKeyVersion});
+    }
+    EXPECT_EQ(repaired, (std::set<std::pair<std::int64_t, std::int64_t>>{{8, 7}, {8, 6}, {8, 4}}));
+    EXPECT_EQ(sent.prune, std::optional<bool>(true));
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 303);
+    client("alice").addSpaceRecipients(spaceId, {person("carol", "user")});
+    EXPECT_EQ(sibling("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AFullSpanBlocksThePruneNotTheRotation) {
+    const std::string spaceId = makeSpace();
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob") {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    client("bob").rotateSpaceKey(spaceId);
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    // Span 2->1 holds four rungs, none good: the Bridge takes no fifth.
+    auto& rungs = bridge.spaces.at(spaceId).rungs;
+    for (int i = 0; i < 3; ++i) {
+        rungs.push_back(server::SpaceRung{
+            .atKeyVersion = 2,
+            .targetKeyVersion = 1,
+            .data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60)),
+        });
+    }
+    EXPECT_EQ(sibling("alice").rotateSpaceKey(spaceId), 3);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    EXPECT_FALSE(sent.prune.value_or(false));
+    EXPECT_FALSE(sent.repairRungs.has_value());
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AnArchiveThatDoesNotReadLeavesTheRotationWithoutAPrune) {
+    const std::string spaceId = makeSpace();
+    client("bob").rotateSpaceKey(spaceId); // version 2, unpruned
+    bridge.onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) -> void {
+        bridgeError<srv::AccessDeniedException>(); // an ACL with spaceRotateKey but not spaceGetKeyArchive
+    };
+    EXPECT_EQ(sibling("alice").rotateSpaceKey(spaceId), 3);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    EXPECT_FALSE(server::SpaceRotateKeyModel::fromJSON(rotation->params).prune.value_or(false));
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AManagerDoesNotPruneWhatSheCannotCheck) {
+    const std::string spaceId = makeSpace();
+    bridge.onSpaceRotate = [](const std::string& caller, server::SpaceRotateKeyModel& model) {
+        if (caller == "bob") {
+            for (auto& rung : model.rungs) {
+                rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+            }
+        }
+    };
+    client("bob").rotateSpaceKey(spaceId);
+    bridge.onSpaceRotate = [](const std::string&, server::SpaceRotateKeyModel&) {};
+    // alice's earlier wraps are not served to her: version 1 is out of her reach.
+    bridge.onSpaceArchive = [](server::SpaceGetKeyArchiveResult& result) { result.keys.clear(); };
+    sibling("alice").rotateSpaceKey(spaceId);
+    const auto rotation = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceRotateKey";
+    });
+    const auto sent = server::SpaceRotateKeyModel::fromJSON(rotation->params);
+    EXPECT_FALSE(sent.prune.value_or(false));
+    EXPECT_FALSE(sent.repairRungs.has_value()) << "nothing she could seal";
+    EXPECT_EQ(bridge.spaces.at(spaceId).info.keysPrunedBelow, 0);
+    EXPECT_TRUE(std::any_of(bridge.spaces.at(spaceId).keys.begin(), bridge.spaces.at(spaceId).keys.end(), [](const auto& e) {
+        return e.keyVersion == 1;
+    })) << "version 1's wraps are kept";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AnotherStatementAtTheStoredPositionIsAFork) {
+    store = std::make_shared<MemoryPinStore>();
+    const std::string spaceId = makeSpace();
+    client("alice").rotateSpaceKey(spaceId);
+    client("bob").getSpace(spaceId); // stores seq 2
+    clients.erase("bob");
+    // The Bridge serves seq 2 again, but another statement there.
+    auto& last = bridge.spaces.at(spaceId).statements.back();
+    last.signature = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(65));
+    EXPECT_THROW(client("bob").getSpace(spaceId), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AStoredStateOfTheEarlierBlobVersionIsAFirstContact) {
+    store = std::make_shared<MemoryPinStore>();
+    const std::string spaceId = makeSpace();
+    client("alice").rotateSpaceKey(spaceId);
+    client("bob").getSpace(spaceId); // the slot exists
+    clients.erase("bob");
+    const std::string slot = store->keyWith("space-pins/", "/" + bridge.users.at("bob").getPublicKey().toBase58DER());
+    ASSERT_FALSE(slot.empty());
+    const auto storedAs = [&](std::uint8_t version, const std::string& body) {
+        store->save(
+            slot, core::Buffer::from(core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", version, slot).seal(body)),
+            core::Buffer::from(store->get(slot))
+        );
+    };
+    // Version 1: "<id> <seq> <digest>" lines, here claiming a position far ahead of the Bridge.
+    storedAs(1, spaceId + " 99 " + std::string(64, '0') + "\n");
+    EXPECT_EQ(client("bob").getSpace(spaceId).keyVersion, 2) << "not read as pins: no fork";
+    // Version 2: whole states, as a build before statements were deltas kept them; one far ahead, too.
+    clients.erase("bob");
+    keytree::SpaceLogState ahead;
+    ahead.spaceId = spaceId;
+    ahead.contextId = CONTEXT;
+    ahead.creator = "alice";
+    ahead.seq = 99;
+    ahead.digest = std::string(32, 'x');
+    ahead.keyVersion = 1;
+    ahead.keyCommits[1] = std::string(32, 'y');
+    storedAs(2, SpaceLog::encodeStates({{spaceId, ahead}}));
+    EXPECT_EQ(client("bob").getSpace(spaceId).keyVersion, 2) << "a version 2 blob is a first contact as well";
+    const auto body = core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", 3, slot).open(store->get(slot));
+    ASSERT_TRUE(body.has_value()) << "rewritten in the current version";
+    const auto states = SpaceLog::decodeStates(body.value());
+    ASSERT_TRUE(states.has_value());
+    EXPECT_EQ(states->at(spaceId).seq, 2u);
+    EXPECT_EQ(states->at(spaceId).keyCommits.size(), 2u);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AnAdditionIsCheckedAgainstTheVerifiedHistoryBeforeSigning) {
+    const std::string spaceId = makeSpace();
+    const auto adds = [&] { return count("alice", "context.spaceAddRecipients"); };
+    EXPECT_THROW(client("alice").addSpaceRecipients(spaceId, {}), core::InvalidParamsException);
+    EXPECT_NO_THROW(client("alice").addSpaceRecipients(spaceId, {person("bob", "user")}))
+        << "already there as asked: a retry after a lost answer is done";
+    EXPECT_THROW(
+        client("alice").addSpaceRecipients(spaceId, {person("bob", "manager")}), core::InvalidParamsException
+    ) << "there in another role";
+    EXPECT_THROW(
+        client("alice").addSpaceRecipients(spaceId, {person("carol", "user"), person("bob", "user")}),
+        core::InvalidParamsException
+    ) << "some already there";
+    EXPECT_THROW(
+        client("alice").addSpaceRecipients(spaceId, {person("carol", "user"), person("carol", "user")}),
+        core::InvalidParamsException
+    ) << "named twice";
+    EXPECT_EQ(adds(), 0u) << "nothing was signed or sent";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, ARemovalIsCheckedAgainstTheVerifiedHistoryBeforeSigning) {
+    const std::string spaceId = makeSpace();
+    const auto rotations = [&] { return count("alice", "context.spaceRotateKey"); };
+    EXPECT_THROW(client("alice").removeSpaceRecipients(spaceId, {}), core::InvalidParamsException);
+    EXPECT_EQ(client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "dave"}}), 1)
+        << "not there: a retry after a lost answer is done";
+    EXPECT_THROW(
+        client("alice").removeSpaceRecipients(
+            spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "bob"}, SpaceRecipientRef{.groupId = {}, .userId = "dave"}}
+        ),
+        core::InvalidParamsException
+    ) << "some not there";
+    EXPECT_THROW(
+        client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "alice"}}),
+        core::InvalidParamsException
+    ) << "no manager left";
+    EXPECT_EQ(rotations(), 0u) << "nothing was signed or sent";
+    EXPECT_EQ(client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "bob"}}), 2);
+}
+
+TEST_F(GroupApiLyingBridge, ASharedEnvelopeLooksUpAFewUnknownRecipientGroupsAtMost) {
+    // The recipient groups come off the unsigned header: the ones this client holds first, then at most 8 others.
+    quiet = true;
+    const std::string billing = createGroup({"alice", "carol"});
+    const std::string billingKey = client("alice").getGroup(billing).groupPubKey;
+    std::vector<WireRecipient> strangers;
+    for (int i = 0; i < 12; ++i) {
+        strangers.push_back(WireRecipient{
+            .isGroup = true,
+            .id = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32)),
+            .pubKey = PrivateKey::generateRandom().getPublicKey().toBase58DER(),
+            .keyVersion = 1
+        });
+    }
+    const auto seal = [&](std::vector<WireRecipient> recipients) {
+        return GroupEnvelopeEncryptor().packMemberEnvelope(
+            "care-team", "0123456789abcdef0123456789abcdef", core::Buffer::from("approved"), bridge.users.at("carol"),
+            privmx::crypto::Crypto::randomBytes(32),
+            EnvelopeSeal{.binding = {}, .keyVersion = 1, .encryptedAt = 1, .authorUserId = "carol"}, recipients
+        );
+    };
+    std::vector<WireRecipient> withBilling = strangers;
+    withBilling.push_back(WireRecipient{.isGroup = true, .id = billing, .pubKey = billingKey, .keyVersion = 1});
+    const std::size_t before = count("alice", "context.groupGetEpochKeys");
+    EXPECT_EQ(client("alice").decryptShared(CONTEXT, NOWHERE, seal(withBilling), ANY).via, billing)
+        << "a group this client holds is tried first, wherever it is listed";
+    EXPECT_EQ(count("alice", "context.groupGetEpochKeys") - before, 1u) << "only the held group was looked up";
+    const std::size_t afterFirst = count("alice", "context.groupGetEpochKeys");
+    EXPECT_THROW(client("alice").decryptShared(CONTEXT, NOWHERE, seal(strangers), ANY), EnvelopeNotARecipientException);
+    EXPECT_EQ(count("alice", "context.groupGetEpochKeys") - afterFirst, 8u) << "12 strangers, 8 looked up";
 }

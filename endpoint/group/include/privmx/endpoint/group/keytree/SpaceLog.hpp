@@ -52,6 +52,8 @@ struct SpaceLogUser {
     std::string role;
 };
 
+// What a statement changes, and a hash of the whole roster after it (`rosterHash`): a statement carries only its
+// deltas, so its size does not grow with the number of recipients.
 struct SpaceStatement {
     std::string spaceId;
     std::string contextId;
@@ -60,9 +62,13 @@ struct SpaceStatement {
     SpaceOp op = SpaceOp::Create;
     std::uint64_t date = 0;
     std::uint64_t keyVersion = 0;
-    std::string keyCommit; // raw, 32 bytes
-    std::vector<SpaceLogGroup> groups;
-    std::vector<SpaceLogUser> users;
+    std::string keyCommit;  // raw, 32 bytes
+    std::string rosterHash; // raw, 32 bytes: SpaceLog::rosterHash of the recipients after it
+    std::vector<SpaceLogGroup> addedGroups;
+    std::vector<SpaceLogUser> addedUsers;
+    std::vector<std::string> removedGroups;
+    std::vector<std::string> removedUsers;
+    std::vector<SpaceLogGroup> refreshedGroups; // a recipient group's later epoch and key; `role` unused
     std::string signer;
     std::string signerPubKey; // base58-DER
     std::string via;          // empty: the signer is a recipient themselves; else the recipient group they act through
@@ -89,7 +95,17 @@ struct SpaceLogState {
 
 class SpaceLog {
 public:
-    static std::string recipientsHash(std::vector<SpaceLogGroup> groups, std::vector<SpaceLogUser> users);
+    // H("pmx-space-roster-v1\0" || u32(#groups) || groups by id || u32(#users) || users by id).
+    static std::string rosterHash(std::vector<SpaceLogGroup> groups, std::vector<SpaceLogUser> users);
+    // Sets the deltas and the rosterHash that take `prior`'s recipients (none for a creation) to `groups` and
+    // `users`: a group whose epoch and key moved, in the same role, is refreshed; any other entry that differs is
+    // removed and added (which no statement may do: `apply` refuses it).
+    static void setRoster(
+        SpaceStatement& statement,
+        const std::optional<SpaceLogState>& prior,
+        const std::vector<SpaceLogGroup>& groups,
+        const std::vector<SpaceLogUser>& users
+    );
     static std::string keyCommit(const std::string& spaceId, std::uint64_t keyVersion, const std::string& key);
     // Throws std::invalid_argument for a statement no writer makes (a hash of the wrong size).
     static std::string signedBytes(const SpaceStatement& statement);
@@ -105,11 +121,39 @@ public:
 
     // The state after `statement`, which must be the one that may follow `prior` (std::nullopt: it is the first).
     // Checks everything the statement itself can show: the chain, both signatures, the signer's standing among
-    // the recipients before it, and that the recipients and the key version moved only as its op allows.
-    // A recipient group's pinned epoch and key move forward only, by a manager or through that group itself.
+    // the recipients before it, that its deltas apply cleanly and only as its op allows (an add only adds absent
+    // recipients, a removal only removes present ones, a refresh only moves a recipient group to a later epoch and
+    // another key; each id once), that the result keeps a manager and hashes to its rosterHash, and the key version.
+    // A recipient group's pinned epoch and key move forward only, by any recipient: whether the key is the group's is
+    // the reader's to check (GroupApiImpl::requireGroupKeyRefreshesHold).
     // What it cannot check is that `signer` is who holds `signerPubKey`: that is the caller's to ask the UserVerifier.
     // Throws GroupDataIntegrityException or GroupUnauthorizedSignerException.
     static SpaceLogState apply(const std::optional<SpaceLogState>& prior, const SpaceStatement& statement);
+
+    // A rung of the Space's key ladder: the key of version `target` sealed under the key of version `at` (target <
+    // at), AES-256-GCM with aad "pmx-space-rung\0" || lp(spaceId) || u64(at) || u64(target), as raw `iv || ciphertext
+    // || tag`. Unsigned: what it opens to is checked against the version's keyCommit by whoever uses it.
+    static std::string sealRung(
+        const std::string& spaceId,
+        std::uint64_t at,
+        std::uint64_t target,
+        const std::string& atKey,
+        const std::string& targetKey
+    );
+    // The key a rung carries. Throws GroupDataIntegrityException when it does not open under `atKey` and its own span.
+    static std::string openRung(
+        const std::string& spaceId,
+        std::uint64_t at,
+        std::uint64_t target,
+        const std::string& atKey,
+        const std::string& sealed
+    );
+
+    // Verified states as the device keeps them (the Space pin store), by Space id. Per Space: u32-lp ids, u64
+    // numbers, its recipients, and one 32-byte commit per key version: about 250 B + 160 B a recipient + 32 B a key
+    // version. Decode is strict: nullopt on anything but what encode writes.
+    static std::string encodeStates(const std::map<std::string, SpaceLogState>& states);
+    static std::optional<std::map<std::string, SpaceLogState>> decodeStates(const std::string& body);
 
     static server::SpaceStatement toWire(const SpaceStatement& statement);
     static SpaceStatement fromWire(const server::SpaceStatement& wire);
